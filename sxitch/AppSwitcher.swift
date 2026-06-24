@@ -64,22 +64,6 @@ class AppSwitcher: ObservableObject {
     func selectByKey(_ char: Character) {
         let lowerChar = char.lowercased()
 
-        if config.keyScheme == "NameIncrement" && typed.isEmpty {
-            typed = String(char).lowercased()
-            depth = 1
-            applyFilters()
-            if filteredApps.count == 1 {
-                activateApp(filteredApps[0])
-                reset()
-            } else if filteredApps.isEmpty {
-                typed = ""
-                depth = 0
-                NSSound.beep()
-                applyFilters()
-            }
-            return
-        }
-
         let matchingApps = filteredApps.filter { app in
             resolvedKeys[app]?.lowercased() == lowerChar
         }
@@ -89,12 +73,11 @@ class AppSwitcher: ObservableObject {
             reset()
         } else if matchingApps.count > 1 {
             if config.keyScheme == "NameIncrement" {
+                filteredApps = matchingApps
+                selectedIndex = 0
+                depth += 1
                 typed = typed + String(char).lowercased()
-                depth = typed.count
-                applyFilters()
-                if filteredApps.isEmpty {
-                    NSSound.beep()
-                }
+                reResolve()
             } else {
                 NSSound.beep()
             }
@@ -107,6 +90,7 @@ class AppSwitcher: ObservableObject {
         guard selectedIndex < filteredApps.count else { return }
         let app = filteredApps[selectedIndex]
         activateApp(app)
+        mode = .normal
         reset()
     }
 
@@ -136,7 +120,6 @@ class AppSwitcher: ObservableObject {
         typed = ""
         depth = 0
         selectedIndex = 0
-        mode = .normal
         applyFilters()
     }
 

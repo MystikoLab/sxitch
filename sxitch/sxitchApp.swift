@@ -101,11 +101,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func activeAppChanged() {
         if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != Bundle.main.bundleIdentifier {
-            window.orderOut(nil)
+            hotkeyManager.hideWindow()
         }
     }
 
     @objc func windowResignedKey(_ notification: Notification) {
-        window.orderOut(nil)
+        hotkeyManager.hideWindow()
     }
 }

@@ -1,6 +1,11 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let openSettings = Notification.Name("com.sxitch.openSettings")
+}
+
 struct ContentView: View {
+    @Environment(\.openSettings) private var openSettings
     @ObservedObject var appSwitcher: AppSwitcher
 
     var body: some View {
@@ -37,6 +42,9 @@ struct ContentView: View {
         )
         .frame(maxWidth: .infinity, alignment: .center)
         .animation(.easeOut(duration: 0.2), value: appSwitcher.mode)
+        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+            openSettings()
+        }
     }
 
     private var modeBanner: some View {

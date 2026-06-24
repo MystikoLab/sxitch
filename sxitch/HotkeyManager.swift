@@ -135,7 +135,9 @@ class HotkeyManager {
             if window.isVisible {
                 if flags.contains(.maskCommand) && keyCode == 43 {
                     DispatchQueue.main.async {
-                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                        self.hideWindow()
+                        NSApp.activate(ignoringOtherApps: true)
+                        NotificationCenter.default.post(name: .openSettings, object: nil)
                     }
                     return nil
                 }
@@ -242,9 +244,10 @@ class HotkeyManager {
     }
 
     func toggleWindow() {
-        guard let window = window else { return }
+        guard let window = window, let appSwitcher = appSwitcher else { return }
         if window.isVisible {
-            appSwitcher?.reset()
+            appSwitcher.mode = .normal
+            appSwitcher.reset()
             window.orderOut(nil)
         } else {
             positionOnActiveScreen()
@@ -261,6 +264,7 @@ class HotkeyManager {
     }
 
     func hideWindow() {
+        appSwitcher?.mode = .normal
         window?.orderOut(nil)
     }
 
