@@ -1,5 +1,5 @@
-import SwiftUI
 import Combine
+import SwiftUI
 
 @MainActor
 class AppSwitcher: ObservableObject {
@@ -36,9 +36,11 @@ class AppSwitcher: ObservableObject {
     private func applyFilters() {
         var result = apps
 
+        // Skip-prefix filter
         let skipPrefixes = config.skipPrefixesData
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { !$0.isEmpty }
 
         if !skipPrefixes.isEmpty {
             result = result.filter { app in
@@ -47,6 +49,13 @@ class AppSwitcher: ObservableObject {
             }
         }
 
+        // Blacklist filter (Pro) — filters by bundle ID
+        let blacklist = config.parsedBlacklist
+        if !blacklist.isEmpty {
+            result = result.filter { !blacklist.contains($0.bundleIdentifier) }
+        }
+
+        // Typed filter for NameIncrement disambiguation
         if !typed.isEmpty {
             result = result.filter { $0.appName.lowercased().hasPrefix(typed.lowercased()) }
         }
@@ -58,7 +67,19 @@ class AppSwitcher: ObservableObject {
 
     private func reResolve() {
         let resolver = KeyResolverFactory.make(config.keyScheme)
-        resolvedKeys = resolver.assignKeys(to: filteredApps, depth: depth)
+        var keys = resolver.assignKeys(to: filteredApps, depth: depth)
+
+        // Apply key overrides (Pro) — override resolver's assignment for specific bundle IDs
+        let overrides = config.parsedKeyOverrides
+        if !overrides.isEmpty {
+            for app in filteredApps {
+                if let override = overrides[app.bundleIdentifier] {
+                    keys[app] = override
+                }
+            }
+        }
+
+        resolvedKeys = keys
     }
 
     func selectByKey(_ char: Character) {

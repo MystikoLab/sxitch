@@ -1,5 +1,5 @@
-import SwiftUI
 import Combine
+import SwiftUI
 
 @MainActor
 class HotkeyManager {
@@ -14,7 +14,7 @@ class HotkeyManager {
         31: "o", 35: "p", 12: "q", 15: "r", 1: "s", 17: "t", 32: "u",
         9: "v", 13: "w", 7: "x", 16: "y", 6: "z",
         18: "1", 19: "2", 20: "3", 21: "4", 23: "5",
-        22: "6", 26: "7", 28: "8", 25: "9", 29: "0"
+        22: "6", 26: "7", 28: "8", 25: "9", 29: "0",
     ]
 
     func setupEventTap() {
@@ -27,11 +27,17 @@ class HotkeyManager {
             AXIsProcessTrustedWithOptions(options)
 
             if permissionCheckTimer == nil {
-                permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                permissionCheckTimer = Timer.scheduledTimer(
+                    withTimeInterval: 1.0,
+                    repeats: true
+                ) { [weak self] _ in
+                    guard let self else { return }
                     if AXIsProcessTrusted() {
-                        self?.permissionCheckTimer?.invalidate()
-                        self?.permissionCheckTimer = nil
-                        self?.setupEventTap()
+                        DispatchQueue.main.async {
+                            self.permissionCheckTimer?.invalidate()
+                            self.permissionCheckTimer = nil
+                            self.setupEventTap()
+                        }
                     }
                 }
             }
@@ -41,21 +47,23 @@ class HotkeyManager {
         permissionCheckTimer?.invalidate()
         permissionCheckTimer = nil
 
-        let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+        let mask: CGEventMask =
+            (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
 
-        let config = AppConfig.shared
-
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: mask,
-            callback: { proxy, type, event, userInfo in
-                let manager = Unmanaged<HotkeyManager>.fromOpaque(userInfo!).takeUnretainedValue()
-                return manager.handleEvent(proxy: proxy, type: type, event: event)
-            },
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
+        guard
+            let tap = CGEvent.tapCreate(
+                tap: .cgSessionEventTap,
+                place: .headInsertEventTap,
+                options: .defaultTap,
+                eventsOfInterest: mask,
+                callback: { proxy, type, event, userInfo in
+                    let manager = Unmanaged<HotkeyManager>.fromOpaque(userInfo!)
+                        .takeUnretainedValue()
+                    return manager.handleEvent(proxy: proxy, type: type, event: event)
+                },
+                userInfo: Unmanaged.passUnretained(self).toOpaque()
+            )
+        else {
             print("Failed to create event tap")
             return
         }
@@ -67,7 +75,9 @@ class HotkeyManager {
         print("Event tap created successfully")
     }
 
-    func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+    func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<
+        CGEvent
+    >? {
         guard let appSwitcher = appSwitcher, let window = window else {
             return Unmanaged.passUnretained(event)
         }
@@ -85,7 +95,8 @@ class HotkeyManager {
                 let isCommandPress = (savedModifier == 1 && (keyCode == 55 || keyCode == 54))
 
                 if isOptionPress || isCommandPress {
-                    let modifierActive = savedModifier == 0
+                    let modifierActive =
+                        savedModifier == 0
                         ? flags.contains(.maskAlternate)
                         : flags.contains(.maskCommand)
 
@@ -209,7 +220,9 @@ class HotkeyManager {
         return modifierMatch && keyCode == Int64(savedKeycode)
     }
 
-    private func isModeHotkey(flags: CGEventFlags, keyCode: Int64, config: AppConfig, mode: String) -> Bool {
+    private func isModeHotkey(flags: CGEventFlags, keyCode: Int64, config: AppConfig, mode: String)
+        -> Bool
+    {
         let modifierKey: String
         let codeKey: String
         switch mode {
@@ -250,6 +263,8 @@ class HotkeyManager {
             appSwitcher.reset()
             window.orderOut(nil)
         } else {
+            // Mirror Rust's Message::OpenThisApp — re-validate if Pro not yet confirmed.
+            LicenseManager.shared.checkStoredLicense()
             positionOnActiveScreen()
             window.orderFrontRegardless()
             window.makeKey()
@@ -258,6 +273,7 @@ class HotkeyManager {
 
     func showWindow() {
         guard let window = window else { return }
+        LicenseManager.shared.checkStoredLicense()
         positionOnActiveScreen()
         window.orderFrontRegardless()
         window.makeKey()
@@ -268,16 +284,58 @@ class HotkeyManager {
         window?.orderOut(nil)
     }
 
-    private func positionOnActiveScreen() {
+    func positionOnActiveScreen() {
         guard let window = window else { return }
-        if let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) {
-            let screenFrame = screen.visibleFrame
-            let windowSize = window.frame.size
-            let x = screenFrame.midX - windowSize.width / 2
-            let y = screenFrame.midY + windowSize.height / 2 + 100
-            window.setFrameOrigin(NSPoint(x: x, y: y))
-        } else {
+        let config = AppConfig.shared
+        let screen =
+            NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) })
+            ?? NSScreen.main
+
+        guard let screen = screen else {
             window.center()
+            return
         }
+
+        let sf = screen.visibleFrame
+        let ws = window.frame.size
+        let margin: CGFloat = 20
+
+        let x: CGFloat
+        let y: CGFloat
+
+        switch config.position {
+        case "TopLeft":
+            x = sf.minX + margin
+            y = sf.maxY - ws.height - margin
+        case "TopCenter":
+            x = sf.midX - ws.width / 2
+            y = sf.maxY - ws.height - margin
+        case "TopRight":
+            x = sf.maxX - ws.width - margin
+            y = sf.maxY - ws.height - margin
+        case "MiddleLeft":
+            x = sf.minX + margin
+            y = sf.midY - ws.height / 2
+        case "MiddleCenter":
+            x = sf.midX - ws.width / 2
+            y = sf.midY - ws.height / 2
+        case "MiddleRight":
+            x = sf.maxX - ws.width - margin
+            y = sf.midY - ws.height / 2
+        case "BottomLeft":
+            x = sf.minX + margin
+            y = sf.minY + margin
+        case "BottomCenter":
+            x = sf.midX - ws.width / 2
+            y = sf.minY + margin
+        case "BottomRight":
+            x = sf.maxX - ws.width - margin
+            y = sf.minY + margin
+        default:  // "Default" — above vertical center
+            x = sf.midX - ws.width / 2
+            y = sf.midY + ws.height / 2 + 100
+        }
+
+        window.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }
