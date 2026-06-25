@@ -7,6 +7,23 @@ class AppConfig: ObservableObject {
 
     let objectWillChange = PassthroughSubject<Void, Never>()
 
+    private init() {
+        // Factory defaults — only applied when the key has never been written.
+        // Existing user preferences are never overwritten.
+        UserDefaults.standard.register(defaults: [
+            // Summon hotkey: Right Command (modifier-only, keycode 256 = "None")
+            "hotkey_modifier": 1,  // Command
+            "hotkey_keycode": 256,  // modifier-only
+            // Mode hotkeys: Ctrl+Q / Ctrl+H / Ctrl+N
+            "mode_quit_modifier": 2,  // Control
+            "mode_quit_keycode": 12,  // Q
+            "mode_hide_modifier": 2,  // Control
+            "mode_hide_keycode": 4,  // H
+            "mode_normal_modifier": 2,  // Control
+            "mode_normal_keycode": 45,  // N
+        ])
+    }
+
     // MARK: - Hotkey
 
     var hotkeyModifier: Int {
@@ -222,8 +239,7 @@ class AppConfig: ObservableObject {
         switch themeMode {
         case "Light": return .light
         case "Dark": return .dark
-        default: return nil
-        }
+        default: return nil        }
     }
 
     // MARK: - Window Appearance

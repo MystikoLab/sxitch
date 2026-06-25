@@ -251,7 +251,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func openGitHub() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/umangsurana/sxitch")!)
+        NSWorkspace.shared.open(URL(string: "https://github.com/unsecretised/sxitch-public")!)
     }
 
     @objc func openHomepage() {
@@ -259,7 +259,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func openCommunity() {
-        NSWorkspace.shared.open(URL(string: "https://discord.gg/sxitch")!)
+        NSWorkspace.shared.open(URL(string: "https://discord.sxitch.app")!)
     }
 
     // MARK: - Public Show Wrapper

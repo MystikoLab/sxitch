@@ -17,7 +17,7 @@ enum AppMode: String, CaseIterable {
         switch self {
         case .normal: return .primary
         case .quit: return .red
-        case .hide: return .yellow
+        case .hide: return Color(red: 1.0, green: 0.75, blue: 0.0)  // amber (#FFBF00)
         }
     }
 }

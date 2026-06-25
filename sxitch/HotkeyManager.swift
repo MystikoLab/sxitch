@@ -7,6 +7,7 @@ class HotkeyManager {
     weak var window: NSWindow?
     var eventTap: CFMachPort?
     private var permissionCheckTimer: Timer?
+    private var mouseMonitor: Any?
 
     private let keyCodeToChar: [Int64: Character] = [
         0: "a", 11: "b", 8: "c", 2: "d", 14: "e", 3: "f", 5: "g",
@@ -79,6 +80,13 @@ class HotkeyManager {
         CGEvent
     >? {
         guard let appSwitcher = appSwitcher, let window = window else {
+            return Unmanaged.passUnretained(event)
+        }
+
+        // If the settings window (or any non-switcher window) is currently key,
+        // pass ALL events through so text fields and KeyCaptureTextField work normally.
+        // NSApp.keyWindow is safe here because the tap runs on the main run loop.
+        if let kw = NSApp.keyWindow, kw !== window {
             return Unmanaged.passUnretained(event)
         }
 
@@ -262,12 +270,13 @@ class HotkeyManager {
             appSwitcher.mode = .normal
             appSwitcher.reset()
             window.orderOut(nil)
+            removeMouseMonitor()
         } else {
-            // Mirror Rust's Message::OpenThisApp — re-validate if Pro not yet confirmed.
             LicenseManager.shared.checkStoredLicense()
             positionOnActiveScreen()
             window.orderFrontRegardless()
             window.makeKey()
+            installMouseMonitor()
         }
     }
 
@@ -277,11 +286,37 @@ class HotkeyManager {
         positionOnActiveScreen()
         window.orderFrontRegardless()
         window.makeKey()
+        installMouseMonitor()
     }
 
     func hideWindow() {
         appSwitcher?.mode = .normal
         window?.orderOut(nil)
+        removeMouseMonitor()
+    }
+
+    // MARK: - Global Mouse Monitor
+    //
+    // Hides the panel whenever the user clicks outside it — including clicks on
+    // an already-focused window where no focus-change notification would fire.
+
+    private func installMouseMonitor() {
+        guard mouseMonitor == nil else { return }
+        mouseMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] _ in
+            guard let self, let window = self.window, window.isVisible else { return }
+            if !window.frame.contains(NSEvent.mouseLocation) {
+                DispatchQueue.main.async { self.hideWindow() }
+            }
+        }
+    }
+
+    private func removeMouseMonitor() {
+        if let m = mouseMonitor {
+            NSEvent.removeMonitor(m)
+            mouseMonitor = nil
+        }
     }
 
     func positionOnActiveScreen() {
@@ -331,9 +366,12 @@ class HotkeyManager {
         case "BottomRight":
             x = sf.maxX - ws.width - margin
             y = sf.minY + margin
-        default:  // "Default" — above vertical center
+        default:  // "Default" — centered, clamped to stay within visible area
+            // Previous formula (midY + height/2 + 100) pushed tall list windows
+            // above sf.maxY (under the notch). Center and clamp instead.
             x = sf.midX - ws.width / 2
-            y = sf.midY + ws.height / 2 + 100
+            let centered = sf.midY - ws.height / 2
+            y = max(sf.minY + margin, min(centered, sf.maxY - ws.height - margin))
         }
 
         window.setFrameOrigin(NSPoint(x: x, y: y))

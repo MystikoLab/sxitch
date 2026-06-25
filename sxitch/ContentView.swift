@@ -47,11 +47,6 @@ struct ContentView: View {
 
     private var mainSwitcher: some View {
         VStack(spacing: 8) {
-            if appSwitcher.mode != .normal {
-                modeBanner
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
             if appSwitcher.filteredApps.isEmpty {
                 Text("No matching apps")
                     .foregroundStyle(.secondary)
@@ -131,32 +126,6 @@ struct ContentView: View {
         .padding(.vertical, 10)
     }
 
-    // MARK: - Mode Banner
-
-    private var modeBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: modeIcon)
-                .font(.system(size: 14, weight: .bold))
-                .contentTransition(.symbolEffect(.replace))
-            Text(appSwitcher.mode.displayName)
-                .font(.system(size: 12, weight: .semibold))
-        }
-        .foregroundStyle(appSwitcher.mode.tintColor)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
-        .background(Capsule().fill(appSwitcher.mode.tintColor.opacity(0.15)))
-        .overlay(Capsule().stroke(appSwitcher.mode.tintColor.opacity(0.3), lineWidth: 1))
-        .padding(.top, 10)
-    }
-
-    private var modeIcon: String {
-        switch appSwitcher.mode {
-        case .quit: return "xmark.circle.fill"
-        case .hide: return "eye.slash.fill"
-        case .normal: return ""
-        }
-    }
-
     // MARK: - Tap Handler
 
     private func handleAppTap(app: RunningApp, at index: Int) {
@@ -184,11 +153,12 @@ struct AppCell: View {
                     .resizable()
                     .frame(width: 70, height: 70)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .jiggling(mode != .normal)
 
                 if !keyText.isEmpty {
                     Text(keyText.uppercased())
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(mode == .normal ? Color.primary : mode.tintColor)
                         .frame(width: 22, height: 22)
                         .background(.thinMaterial)
                         .clipShape(Circle())
@@ -212,7 +182,11 @@ struct AppCell: View {
             Text(app.appName)
                 .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
-                .foregroundStyle(isSelected ? .primary : .secondary)
+                .foregroundStyle(
+                    mode != .normal
+                        ? mode.tintColor
+                        : (isSelected ? Color.primary : Color.secondary)
+                )
                 .frame(maxWidth: 80)
         }
         .padding(10)
@@ -243,11 +217,16 @@ struct AppListRow: View {
                 .resizable()
                 .frame(width: 28, height: 28)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
+                .jiggling(mode != .normal)
 
             Text(app.appName)
                 .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                 .lineLimit(1)
-                .foregroundStyle(isSelected ? .primary : .secondary)
+                .foregroundStyle(
+                    mode != .normal
+                        ? mode.tintColor
+                        : (isSelected ? Color.primary : Color.secondary)
+                )
 
             Spacer()
 
@@ -260,7 +239,7 @@ struct AppListRow: View {
             if !keyText.isEmpty {
                 Text(keyText.uppercased())
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(mode == .normal ? Color.secondary : mode.tintColor)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(.thinMaterial)
@@ -279,5 +258,42 @@ struct AppListRow: View {
                 .stroke(isSelected ? mode.tintColor : .clear, lineWidth: 1.5)
         )
         .animation(.easeOut(duration: 0.075), value: isSelected)
+    }
+}
+
+// MARK: - Jiggle
+
+/// Adds the iOS-style icon-wiggle to any view.  The animation starts the
+/// moment `active` becomes true and stops (snapping cleanly to zero) when
+/// it becomes false.
+private struct JiggleModifier: ViewModifier {
+    let active: Bool
+    @State private var angle: Double = 0
+
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(angle))
+            .onAppear { update(active) }
+            .onChange(of: active) { _, v in update(v) }
+    }
+
+    private func update(_ on: Bool) {
+        if on {
+            // Start at -2° so the very first swing goes toward +2° —
+            // gives a symmetric ±2° oscillation from the first frame.
+            angle = -2
+            withAnimation(
+                .easeInOut(duration: 0.12)
+                    .repeatForever(autoreverses: true)
+            ) { angle = 2 }
+        } else {
+            withAnimation(.easeOut(duration: 0.15)) { angle = 0 }
+        }
+    }
+}
+
+extension View {
+    fileprivate func jiggling(_ active: Bool) -> some View {
+        modifier(JiggleModifier(active: active))
     }
 }

@@ -381,8 +381,9 @@ struct SettingsView: View {
 
             VStack(spacing: 10) {
                 SxitchLinkButton(title: "Homepage", url: "https://sxitch.app")
-                SxitchLinkButton(title: "GitHub", url: "https://github.com/umangsurana/sxitch")
-                SxitchLinkButton(title: "Community (Discord)", url: "https://discord.gg/sxitch")
+                SxitchLinkButton(
+                    title: "GitHub", url: "https://github.com/unsecretised/sxitch-public")
+                SxitchLinkButton(title: "Community (Discord)", url: "https://discord.sxitch.app")
                 if !config.isPro {
                     SxitchLinkButton(
                         title: "Get Sxitch Pro", url: "https://sxitch.app/#pricing",
