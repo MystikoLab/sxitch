@@ -184,6 +184,19 @@ extension AppTheme {
     }
 }
 
+// MARK: - SwiftUI Environment
+
+private struct AppThemeKey: EnvironmentKey {
+    static let defaultValue = AppTheme.theme(for: "dark-default")
+}
+
+extension EnvironmentValues {
+    var appTheme: AppTheme {
+        get { self[AppThemeKey.self] }
+        set { self[AppThemeKey.self] = newValue }
+    }
+}
+
 // MARK: - Color Hex Initializer
 
 extension Color {

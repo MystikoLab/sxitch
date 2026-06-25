@@ -78,7 +78,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         window = panel
 
-        // Auto-resize when filtered app list changes
+        // Auto-resize when filtered app list changes.
+        // Keep the window's top-center pinned so pressing Escape (which restores
+        // the full app list) doesn't jump the window to a new position.
         appSwitcher.$filteredApps
             .dropFirst()
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
@@ -87,11 +89,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     let hostingView = self.window.contentView as? NSHostingView<ContentView>
                 else { return }
                 let newSize = hostingView.fittingSize
-                if self.window.frame.size != newSize {
+                let current = self.window.frame
+                guard current.size != newSize else { return }
+
+                if self.window.isVisible {
+                    // Anchor the top-center so the panel grows/shrinks in place.
+                    let topCenterX = current.midX
+                    let topY = current.maxY  // maxY = top edge in macOS coords
+                    let newOrigin = NSPoint(
+                        x: topCenterX - newSize.width / 2,
+                        y: topY - newSize.height
+                    )
+                    self.window.setFrame(
+                        NSRect(origin: newOrigin, size: newSize),
+                        display: true, animate: false
+                    )
+                } else {
+                    // Window is hidden; just update size so it's correct when shown next.
                     self.window.setContentSize(newSize)
-                    if self.window.isVisible {
-                        self.hotkeyManager.positionOnActiveScreen()
-                    }
                 }
             }
             .store(in: &cancellables)

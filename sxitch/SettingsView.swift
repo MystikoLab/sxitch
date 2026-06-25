@@ -268,7 +268,7 @@ struct SettingsView: View {
                         modifier: Binding.config(\.quitModeModifier),
                         keycode: Binding.config(\.quitModeKeycode)
                     )
-                    .frame(width: 100)
+                    .frame(width: 130)
                 }
                 Text("Press to enter Quit mode. Then select an app to terminate it.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -282,7 +282,7 @@ struct SettingsView: View {
                         modifier: Binding.config(\.hideModeModifier),
                         keycode: Binding.config(\.hideModeKeycode)
                     )
-                    .frame(width: 100)
+                    .frame(width: 130)
                 }
                 Text("Press to enter Hide mode. Then select an app to hide it.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -296,7 +296,7 @@ struct SettingsView: View {
                         modifier: Binding.config(\.normalModeModifier),
                         keycode: Binding.config(\.normalModeKeycode)
                     )
-                    .frame(width: 100)
+                    .frame(width: 130)
                 }
                 Text("Return to Normal mode (switch/focus apps).")
                     .font(.caption).foregroundStyle(.secondary)

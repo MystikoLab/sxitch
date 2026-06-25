@@ -239,7 +239,8 @@ class AppConfig: ObservableObject {
         switch themeMode {
         case "Light": return .light
         case "Dark": return .dark
-        default: return nil        }
+        default: return nil
+        }
     }
 
     // MARK: - Window Appearance

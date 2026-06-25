@@ -133,7 +133,8 @@ class AppSwitcher: ObservableObject {
     }
 
     func setMode(_ newMode: AppMode) {
-        mode = newMode
+        // Pressing the same mode hotkey again toggles back to normal.
+        mode = (mode == newMode) ? .normal : newMode
         reset()
     }
 
@@ -171,7 +172,14 @@ class AppSwitcher: ObservableObject {
         config.objectWillChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.reResolve()
+                // Defer to the next run-loop turn so we never publish @Published
+                // changes while SwiftUI's own view-update cycle is still in flight.
+                // Firing synchronously here is what causes:
+                //   "Publishing changes from within view updates is not allowed"
+                // …and subsequently causes macOS to disable the CGEventTap.
+                DispatchQueue.main.async {
+                    self?.reResolve()
+                }
             }
             .store(in: &cancellables)
     }

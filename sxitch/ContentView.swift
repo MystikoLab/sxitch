@@ -11,11 +11,14 @@ struct ContentView: View {
 
     @State private var windowPickerApp: RunningApp? = nil
 
+    // Resolve the active theme once here so every child inherits it via environment.
+    private var theme: AppTheme {
+        appSwitcher.config.currentTheme(for: colorScheme)
+    }
+
     var body: some View {
         Group {
             if !appSwitcher.config.enableUI {
-                // UI disabled — keep a 1×1 invisible view so the window stays alive
-                // and the openSettings notification can still be received.
                 Color.clear
                     .frame(width: 1, height: 1)
                     .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
@@ -49,7 +52,7 @@ struct ContentView: View {
         VStack(spacing: 8) {
             if appSwitcher.filteredApps.isEmpty {
                 Text("No matching apps")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.text.opacity(0.45))
                     .padding(40)
             } else if appSwitcher.config.layout == "List" {
                 listLayout
@@ -61,9 +64,10 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 30))
         .overlay(
             RoundedRectangle(cornerRadius: 30)
-                .stroke(.separator, lineWidth: 0.5)
+                .stroke(theme.text.opacity(0.12), lineWidth: 0.5)
         )
         .preferredColorScheme(appSwitcher.config.effectiveColorScheme)
+        .environment(\.appTheme, theme)  // ← all children inherit the theme
         .frame(maxWidth: .infinity, alignment: .center)
         .animation(.easeOut(duration: 0.2), value: appSwitcher.mode)
         .animation(.easeOut(duration: 0.075), value: appSwitcher.filteredApps.count)
@@ -79,47 +83,40 @@ struct ContentView: View {
         if appSwitcher.config.blur {
             Rectangle().fill(.ultraThinMaterial)
         } else {
-            let theme = appSwitcher.config.currentTheme(for: colorScheme)
             Rectangle().fill(theme.background)
         }
     }
 
-    // MARK: - Grid Layout
+    // MARK: - Grid
 
     private var gridLayout: some View {
         HStack(spacing: 12) {
             ForEach(Array(appSwitcher.filteredApps.enumerated()), id: \.element.id) { index, app in
                 AppCell(
                     app: app,
-                    keyText: appSwitcher.config.showKeys
-                        ? appSwitcher.resolvedKeys[app] ?? "" : "",
+                    keyText: appSwitcher.config.showKeys ? appSwitcher.resolvedKeys[app] ?? "" : "",
                     isSelected: index == appSwitcher.selectedIndex,
                     mode: appSwitcher.mode
                 )
-                .onTapGesture {
-                    handleAppTap(app: app, at: index)
-                }
+                .onTapGesture { handleAppTap(app: app, at: index) }
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
 
-    // MARK: - List Layout
+    // MARK: - List
 
     private var listLayout: some View {
         VStack(spacing: 4) {
             ForEach(Array(appSwitcher.filteredApps.enumerated()), id: \.element.id) { index, app in
                 AppListRow(
                     app: app,
-                    keyText: appSwitcher.config.showKeys
-                        ? appSwitcher.resolvedKeys[app] ?? "" : "",
+                    keyText: appSwitcher.config.showKeys ? appSwitcher.resolvedKeys[app] ?? "" : "",
                     isSelected: index == appSwitcher.selectedIndex,
                     mode: appSwitcher.mode
                 )
-                .onTapGesture {
-                    handleAppTap(app: app, at: index)
-                }
+                .onTapGesture { handleAppTap(app: app, at: index) }
             }
         }
         .padding(.horizontal, 12)
@@ -141,12 +138,16 @@ struct ContentView: View {
 // MARK: - AppCell (Grid)
 
 struct AppCell: View {
+    @Environment(\.appTheme) private var theme
+
     let app: RunningApp
     let keyText: String
     let isSelected: Bool
     let mode: AppMode
 
     var body: some View {
+        let modeColor = mode.color(for: theme)
+
         VStack(spacing: 6) {
             ZStack(alignment: .topTrailing) {
                 Image(nsImage: app.icon)
@@ -158,19 +159,18 @@ struct AppCell: View {
                 if !keyText.isEmpty {
                     Text(keyText.uppercased())
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(mode == .normal ? Color.primary : mode.tintColor)
+                        .foregroundStyle(mode == .normal ? theme.text : modeColor)
                         .frame(width: 22, height: 22)
                         .background(.thinMaterial)
                         .clipShape(Circle())
-                        .overlay(Circle().stroke(.separator, lineWidth: 0.5))
+                        .overlay(Circle().stroke(theme.text.opacity(0.15), lineWidth: 0.5))
                         .offset(x: 4, y: -4)
                 }
 
-                // Mode indicator overlay
                 if mode != .normal {
                     Image(systemName: mode == .quit ? "xmark.circle.fill" : "eye.slash.fill")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(mode.tintColor)
+                        .foregroundStyle(modeColor)
                         .frame(width: 22, height: 22)
                         .background(.thinMaterial)
                         .clipShape(Circle())
@@ -184,19 +184,19 @@ struct AppCell: View {
                 .lineLimit(1)
                 .foregroundStyle(
                     mode != .normal
-                        ? mode.tintColor
-                        : (isSelected ? Color.primary : Color.secondary)
+                        ? modeColor
+                        : (isSelected ? theme.text : theme.text.opacity(0.55))
                 )
                 .frame(maxWidth: 80)
         }
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(isSelected ? mode.tintColor.opacity(0.2) : .clear)
+                .fill(isSelected ? modeColor.opacity(0.18) : Color.clear)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(isSelected ? mode.tintColor : .clear, lineWidth: 2)
+                .stroke(isSelected ? modeColor : Color.clear, lineWidth: 2)
         )
         .scaleEffect(isSelected ? 1.05 : 1.0)
         .animation(.easeOut(duration: 0.075), value: isSelected)
@@ -206,12 +206,16 @@ struct AppCell: View {
 // MARK: - AppListRow (List)
 
 struct AppListRow: View {
+    @Environment(\.appTheme) private var theme
+
     let app: RunningApp
     let keyText: String
     let isSelected: Bool
     let mode: AppMode
 
     var body: some View {
+        let modeColor = mode.color(for: theme)
+
         HStack(spacing: 10) {
             Image(nsImage: app.icon)
                 .resizable()
@@ -224,8 +228,8 @@ struct AppListRow: View {
                 .lineLimit(1)
                 .foregroundStyle(
                     mode != .normal
-                        ? mode.tintColor
-                        : (isSelected ? Color.primary : Color.secondary)
+                        ? modeColor
+                        : (isSelected ? theme.text : theme.text.opacity(0.55))
                 )
 
             Spacer()
@@ -233,29 +237,32 @@ struct AppListRow: View {
             if mode != .normal {
                 Image(systemName: mode == .quit ? "xmark.circle.fill" : "eye.slash.fill")
                     .font(.system(size: 13))
-                    .foregroundStyle(mode.tintColor)
+                    .foregroundStyle(modeColor)
             }
 
             if !keyText.isEmpty {
                 Text(keyText.uppercased())
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundStyle(mode == .normal ? Color.secondary : mode.tintColor)
+                    .foregroundStyle(mode == .normal ? theme.text.opacity(0.5) : modeColor)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(.thinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 4))
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(.separator, lineWidth: 0.5))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(theme.text.opacity(0.12), lineWidth: 0.5)
+                    )
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? mode.tintColor.opacity(0.15) : .clear)
+                .fill(isSelected ? modeColor.opacity(0.14) : Color.clear)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? mode.tintColor : .clear, lineWidth: 1.5)
+                .stroke(isSelected ? modeColor : Color.clear, lineWidth: 1.5)
         )
         .animation(.easeOut(duration: 0.075), value: isSelected)
     }
@@ -263,9 +270,6 @@ struct AppListRow: View {
 
 // MARK: - Jiggle
 
-/// Adds the iOS-style icon-wiggle to any view.  The animation starts the
-/// moment `active` becomes true and stops (snapping cleanly to zero) when
-/// it becomes false.
 private struct JiggleModifier: ViewModifier {
     let active: Bool
     @State private var angle: Double = 0
@@ -279,13 +283,10 @@ private struct JiggleModifier: ViewModifier {
 
     private func update(_ on: Bool) {
         if on {
-            // Start at -2° so the very first swing goes toward +2° —
-            // gives a symmetric ±2° oscillation from the first frame.
             angle = -2
-            withAnimation(
-                .easeInOut(duration: 0.12)
-                    .repeatForever(autoreverses: true)
-            ) { angle = 2 }
+            withAnimation(.easeInOut(duration: 0.12).repeatForever(autoreverses: true)) {
+                angle = 2
+            }
         } else {
             withAnimation(.easeOut(duration: 0.15)) { angle = 0 }
         }
