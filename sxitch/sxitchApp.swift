@@ -9,20 +9,17 @@ import SwiftUI
 
 @main
 struct sxitchApp: App {
+    private var appState = userState.shared
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @AppStorage("showMenuIcon") var showMenuIcon: Bool = true
     var body: some Scene {
-        Settings {
-            SettingsView()
-                .toolbarVisibility(.hidden)
-                .navigationTitle("Sxitch Settings")
-        }
-        .windowToolbarStyle(.unified)
-        .windowStyle(.hiddenTitleBar)
-
-        
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $showMenuIcon) {
             Label {
-                Text("Sxitch")
+                if appState.isPro {
+                    Text("Sxitch Pro")
+                } else {
+                    Text("Sxitch Free")
+                }
             } icon: {
                 Image(nsImage: makeMenuBarIcon())
                     .resizable()
@@ -57,6 +54,11 @@ struct sxitchApp: App {
         } label: {
             Image(nsImage: makeMenuBarIcon())
         }
+        
+        Settings {
+            SettingsView()
+        }
+        .windowStyle(.hiddenTitleBar)
     }
 }
 
@@ -69,10 +71,10 @@ func makeMenuBarIcon() -> NSImage {
         let trunkHalf = size * 0.30
         let rodLen = size * 0.22
         let dotR = strokeW * 0.85
-
+        
         NSColor.white.setStroke()
         NSColor.white.setFill()
-
+        
         func drawLine(_ x0: CGFloat, _ y0: CGFloat, _ x1: CGFloat, _ y1: CGFloat) {
             let p = NSBezierPath()
             p.move(to: NSPoint(x: x0, y: y0))
@@ -81,7 +83,7 @@ func makeMenuBarIcon() -> NSImage {
             p.lineCapStyle = .round
             p.stroke()
         }
-
+        
         func dotAt(angleDeg: CGFloat, len: CGFloat) {
             let rad = angleDeg * .pi / 180
             let tx = cx + len * cos(rad)
@@ -90,11 +92,11 @@ func makeMenuBarIcon() -> NSImage {
             d.appendArc(withCenter: NSPoint(x: tx, y: ty), radius: dotR, startAngle: 0, endAngle: 360)
             d.fill()
         }
-
+        
         drawLine(cx, cy - trunkHalf, cx, cy + trunkHalf)
         dotAt(angleDeg: 90, len: trunkHalf)
         dotAt(angleDeg: 270, len: trunkHalf)
-
+        
         let branches: [(CGFloat, CGFloat)] = [(50, rodLen), (135, rodLen)]
         for (angle, len) in branches {
             let rad = angle * .pi / 180
@@ -103,7 +105,7 @@ func makeMenuBarIcon() -> NSImage {
             drawLine(cx, cy, tipX, tipY)
             dotAt(angleDeg: angle, len: len)
         }
-
+        
         return true
     }
     image.isTemplate = true

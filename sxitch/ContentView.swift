@@ -24,10 +24,12 @@ class AppState: ObservableObject {
 struct ContentView: View {
     @State private var openApps: [RunningApp] = RunningApp.fetchRunningApps()
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
+    
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.scenePhase) private var scenePhase
+    
     @AppStorage("appBlacklists") var blacklist: [String] = []
     @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"]
-    
     
     @ObservedObject var appState: AppState
     
@@ -41,14 +43,20 @@ struct ContentView: View {
                 }
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.typed)
+        .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.mode)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 30))
         .frame(maxWidth: .infinity,alignment: .center)
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didLaunchApplicationNotification)) { note in
-            openApps = RunningApp.fetchRunningApps()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                openApps = RunningApp.fetchRunningApps()
+            }
         }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didTerminateApplicationNotification)) { _ in
-            openApps = RunningApp.fetchRunningApps()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                openApps = RunningApp.fetchRunningApps()
+            }
         }
         .onKeyPress(.escape) {
             if !self.appState.typed.isEmpty {
@@ -63,13 +71,22 @@ struct ContentView: View {
         }
         .onChange(of: prefixStrip) { _, _ in
             openApps = RunningApp.fetchRunningApps()
+        }.task {
+            if !userState.shared.isPro {
+                await userState.shared.checkCurrentActivationStatus()
+            }
         }
     }
     
     func appView(_ app: RunningApp) -> some View {
-        var appWithDepth = app
-        appWithDepth.depth = appState.typed.count
-        return appWithDepth
+        var modifiedApp = app
+        modifiedApp.depth = appState.typed.count
+        modifiedApp.appMode = appState.mode
+        return modifiedApp
+            .transition(.asymmetric(
+                insertion: .scale(scale: 0.85).combined(with: .opacity),
+                removal: .scale(scale: 0.85).combined(with: .opacity)
+            ))
     }
     
     
@@ -88,6 +105,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         31:"o", 35:"p", 12:"q", 15:"r", 1:"s",  17:"t", 32:"u",
         9:"v",  13:"w", 7:"x",  16:"y", 6:"z"
     ]
+    
+    var proState = userState.shared
+    
     let flagForKeyCode: [Int64: CGEventFlags] = [
         58: .maskAlternate,    // left ⌥
         61: .maskAlternate,    // right ⌥
@@ -112,6 +132,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func closeWindow() {
         appState.typed = ""
         appState.depth = 0
+        appState.mode = .normal
         window.orderOut(nil)
     }
     
@@ -235,6 +256,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return nil
         }
         
+        if self.window.isVisible && flags.contains(.maskControl) && proState.isPro {
+            if keyCode == 12 {
+                // `q` key
+                DispatchQueue.main.async {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
+                        self.appState.mode = self.appState.mode == .quit ? .normal : .quit
+                    }
+                }
+                return nil
+            } else if keyCode == 4 {
+                // `h` key
+                DispatchQueue.main.async {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
+                        self.appState.mode = self.appState.mode == .hide ? .normal : .hide
+                    }
+                }
+                return nil
+            } else if keyCode == 45 {
+                // `n` key
+                DispatchQueue.main.async {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
+                        self.appState.mode = .normal
+                    }
+                }
+                return nil
+            }
+        }
+        
         
 
         let matchesModifier: Bool = {
@@ -257,7 +306,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
            flags.contains(flag) {
             DispatchQueue.main.async {
                 if self.window.isVisible {
-                    self.window.orderOut(nil)
+                    self.closeWindow()
                 } else {
                     self.window.orderFrontRegardless()
                 }
@@ -272,10 +321,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     app.appName.lowercased().starts(with: candidate.lowercased())
                 }
                 if filteredApps.count == 1 {
-                    closeWindow()
                     DispatchQueue.main.async {
                         filteredApps[0].performAction(action: self.appState.mode)
                     }
+                    if self.appState.mode == .normal {
+                        closeWindow()
+                    }
+                    appState.depth = 0
+                    appState.typed = ""
                 } else {
                     DispatchQueue.main.async {
                         self.appState.typed = candidate

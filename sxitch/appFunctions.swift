@@ -10,12 +10,21 @@ import SwiftUI
 
 struct RunningApp: Identifiable, View {
     @AppStorage("appBlacklists") var blacklist: [String] = []
+    
     var id: Int32 { app.processIdentifier }
     var appName: String
     var app: NSRunningApplication
     var icon: NSImage
     var bundleUrl: URL?
     var depth: Int = 0
+    var appMode: AppMode = .normal
+    var modeOverlayColor: Color {
+        switch appMode {
+        case .quit: return .red.opacity(0.7)
+        case .hide: return .orange.opacity(0.7)
+        case .normal: return .clear
+        }
+    }
     
     var body: some View {
         VStack {
@@ -31,6 +40,7 @@ struct RunningApp: Identifiable, View {
                         let singleCharString = String(stripped[charIndex])
                         
                         Text(singleCharString.uppercased())
+                            .foregroundStyle(appMode == .normal ? Color.primary : modeOverlayColor)
                             .font(.callout)
                             .padding(6)
                             .frame(width: 20, height: 20)
@@ -41,14 +51,16 @@ struct RunningApp: Identifiable, View {
             }
             Text(self.appName)
                 .opacity(0.7)
+                .foregroundStyle(appMode == .normal ? Color.primary : modeOverlayColor)
         }
         .padding(20)
         .onTapGesture {
-            self.openApp()
+            self.performAction(action: appMode)
         }
     }
     
     static func fetchRunningApps() -> [RunningApp] {
+        let usState = userState.shared
         @AppStorage("appBlacklists") var blacklist: [String] = []
         @AppStorage("prefixStrips") var prefixStrips: [String] = ["microsoft", "adobe"]
         return NSWorkspace.shared.runningApplications
@@ -72,7 +84,7 @@ struct RunningApp: Identifiable, View {
             }
             .filter { app in
                 return app.app.activationPolicy == .regular &&
-                !blacklist.contains(app.appName.lowercased())
+                ( !blacklist.contains(app.appName.lowercased()) || !usState.isPro )
             }
             .sorted{ $0.appName < $1.appName }
     }
