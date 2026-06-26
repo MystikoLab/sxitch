@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 
 struct RunningApp: Identifiable, View {
+    @AppStorage("appBlacklists") var blacklist: [String] = []
     var id: Int32 { app.processIdentifier }
     var appName: String
     var app: NSRunningApplication
@@ -24,17 +25,18 @@ struct RunningApp: Identifiable, View {
                     .frame(width: 60, height: 60)
                 
                 if depth < self.appName.count {
-                    let charIndex = self.appName.index(self.appName.startIndex, offsetBy: depth)
-                    let singleCharString = String(self.appName[charIndex])
-                    
-                    Text(singleCharString.uppercased())
-                        .font(.callout)
-                        .padding(6)
-                        .frame(width: 20, height: 20)
-                        .background(Color(nsColor: .windowBackgroundColor).opacity(0.8))
-                        .clipShape(RoundedRectangle(cornerRadius: 30))
+                    let stripped = self.appName.replacingOccurrences(of: " ", with: "")
+                    if depth < stripped.count {
+                        let charIndex = stripped.index(stripped.startIndex, offsetBy: depth)
+                        let singleCharString = String(stripped[charIndex])
                         
-                        //.offset(x: 8, y: -8)
+                        Text(singleCharString.uppercased())
+                            .font(.callout)
+                            .padding(6)
+                            .frame(width: 20, height: 20)
+                            .background(Color(nsColor: .windowBackgroundColor).opacity(0.8))
+                            .clipShape(RoundedRectangle(cornerRadius: 30))
+                    }
                 }
             }
             Text(self.appName)
@@ -47,8 +49,9 @@ struct RunningApp: Identifiable, View {
     }
     
     static func fetchRunningApps() -> [RunningApp] {
+        @AppStorage("appBlacklists") var blacklist: [String] = []
+        @AppStorage("prefixStrips") var prefixStrips: [String] = ["microsoft", "adobe"]
         return NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular  }
             .map { app in
                 RunningApp(
                     appName: app.localizedName ?? "Unknown",
@@ -56,6 +59,20 @@ struct RunningApp: Identifiable, View {
                     icon: app.icon ?? NSImage(),
                     bundleUrl: app.bundleURL
                 )
+            }
+            .map { app in
+                var app = app
+                for prefix in prefixStrips {
+                    if app.appName.lowercased().hasPrefix(prefix.lowercased()) {
+                        app.appName = String(app.appName.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                        break
+                    }
+                }
+                return app
+            }
+            .filter { app in
+                return app.app.activationPolicy == .regular &&
+                !blacklist.contains(app.appName.lowercased())
             }
             .sorted{ $0.appName < $1.appName }
     }

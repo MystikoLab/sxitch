@@ -25,6 +25,9 @@ struct ContentView: View {
     @State private var openApps: [RunningApp] = RunningApp.fetchRunningApps()
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
     @Environment(\.openSettings) private var openSettings
+    @AppStorage("appBlacklists") var blacklist: [String] = []
+    @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"]
+    
     
     @ObservedObject var appState: AppState
     
@@ -54,6 +57,12 @@ struct ContentView: View {
                 appDelegate.closeWindow()
             }
             return KeyPress.Result.handled
+        }
+        .onChange(of: blacklist) { _, _ in
+            openApps = RunningApp.fetchRunningApps()
+        }
+        .onChange(of: prefixStrip) { _, _ in
+            openApps = RunningApp.fetchRunningApps()
         }
     }
     

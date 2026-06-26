@@ -13,9 +13,13 @@ struct sxitchApp: App {
     var body: some Scene {
         Settings {
             SettingsView()
-                .toolbar(.hidden)
+                .toolbarVisibility(.hidden)
+                .navigationTitle("Sxitch Settings")
         }
-        .windowBackgroundDragBehavior(.enabled)
+        .windowToolbarStyle(.unified)
+        .windowStyle(.hiddenTitleBar)
+
+        
         MenuBarExtra {
             Label {
                 Text("Sxitch")
