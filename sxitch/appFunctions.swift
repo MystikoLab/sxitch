@@ -8,7 +8,10 @@
 import Foundation
 import SwiftUI
 
-struct RunningApp: Identifiable, View {
+struct RunningApp: Identifiable, Equatable, View {
+    static func == (lhs: RunningApp, rhs: RunningApp) -> Bool {
+        lhs.id == rhs.id
+    }
     @AppStorage("appBlacklists") var blacklist: [String] = []
 
     var id: Int32 { app.processIdentifier }
@@ -109,8 +112,8 @@ struct RunningApp: Identifiable, View {
 
     static func fetchRunningApps() -> [RunningApp] {
         let usState = userState.shared
-        @AppStorage("appBlacklists") var blacklist: [String] = []
-        @AppStorage("prefixStrips") var prefixStrips: [String] = ["microsoft", "adobe"]
+        let blacklist = UserDefaults.standard.stringArray(forKey: "appBlacklists") ?? []
+        let prefixStrips = UserDefaults.standard.stringArray(forKey: "prefixStrips") ?? ["microsoft", "adobe"]
         return NSWorkspace.shared.runningApplications
             .map { app in
                 RunningApp(
@@ -151,6 +154,7 @@ struct RunningApp: Identifiable, View {
     }
 
     func quitApp() {
+        print("Terminating: \(self.appName)")
         self.app.terminate()
     }
 

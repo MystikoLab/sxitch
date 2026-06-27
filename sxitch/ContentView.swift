@@ -66,6 +66,7 @@ struct ContentView: View {
                         listRow(app)
                     }
                 }
+                .id(appState.mode)
             }
             .frame(width: 300)
             .frame(maxHeight: 400)
@@ -79,6 +80,7 @@ struct ContentView: View {
                     appView(app)
                 }
             }
+            .id(appState.mode)
             .frame(maxWidth: .infinity, alignment: .center)
         }
     }
@@ -92,7 +94,11 @@ struct ContentView: View {
             .onReceive(
                 NSWorkspace.shared.notificationCenter.publisher(
                     for: NSWorkspace.didLaunchApplicationNotification)
-            ) { note in
+            ) { _ in
+                // Skip while the window is hidden: updating @State during a constraint
+                // update pass on a hidden window triggers a setNeedsUpdateConstraints
+                // reentrancy crash. The list is refreshed when the window is shown instead.
+                guard appDelegate.window.isVisible else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                     openApps = RunningApp.fetchRunningApps()
                 }
@@ -101,9 +107,15 @@ struct ContentView: View {
                 NSWorkspace.shared.notificationCenter.publisher(
                     for: NSWorkspace.didTerminateApplicationNotification)
             ) { _ in
+                guard appDelegate.window.isVisible else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                     openApps = RunningApp.fetchRunningApps()
                 }
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: .switcherWillShow)
+            ) { _ in
+                openApps = RunningApp.fetchRunningApps()
             }
             .onKeyPress(.escape) {
                 if appState.drillDownApp != nil {
@@ -124,6 +136,16 @@ struct ContentView: View {
             }
             .onChange(of: prefixStrip) { _, _ in
                 openApps = RunningApp.fetchRunningApps()
+            }
+            .onChange(of: openApps) { _, _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    appDelegate.resizeWindowToFit()
+                }
+            }
+            .onChange(of: appState.typed) { _, _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    appDelegate.resizeWindowToFit()
+                }
             }
             .onChange(of: layoutStyle) { _, _ in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -172,14 +194,16 @@ struct ContentView: View {
     func handleAppTap(_ app: RunningApp) {
         let windows = fetchWindowsForApp(app.app)
         let windowPickerEnabled = UserDefaults.standard.bool(forKey: "windowPickerEnabled")
+        let currentMode = appState.mode  // capture before closeWindow() resets it
+
         if windows.count > 1 && userState.shared.isPro && windowPickerEnabled {
             appState.drillDownApp = app.app
         } else if windows.count == 1 {
-            windows[0].performAction(appState.mode)
+            windows[0].performAction(currentMode)
             appDelegate.closeWindow()
         } else {
-            app.performAction(action: appState.mode)
-            if appState.mode == .normal { appDelegate.closeWindow() }
+            app.performAction(action: currentMode)
+            if currentMode == .normal { appDelegate.closeWindow() }
         }
     }
 
@@ -204,6 +228,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var appState = AppState()
     var window: NSWindow!
     var eventTap: CFMachPort?
+    private var suppressActiveAppCheck = false
     private var permissionCheckTimer: Timer?
     var lastModifierKeyCode: Int64 = 0
     let keyCodeToChar: [Int64: Character] = [
@@ -241,6 +266,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func closeWindow() {
+        guard window.isVisible else { return }
         appState.typed = ""
         appState.depth = 0
         appState.mode = .normal
@@ -257,6 +283,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func resizeWindowToFit() {
+        guard window.isVisible else { return }
         guard let hostingView = window.contentView else { return }
         let newSize = hostingView.fittingSize
         guard newSize.width > 0, newSize.height > 0 else { return }
@@ -264,11 +291,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let screen = window.screen ?? NSScreen.main
         let screenWidth = screen?.frame.width ?? 0
         let newX = (screenWidth - newSize.width) / 2
-        // Anchor to the top edge so height changes grow downward, not upward
         let newY = currentFrame.maxY - newSize.height
+        // display: false avoids triggering an immediate display pass (which runs
+        // updateConstraints) while a state change may still be pending, preventing
+        // the setNeedsUpdateConstraints reentrancy that causes NSGenericException.
         window.setFrame(
             NSRect(x: newX, y: newY, width: newSize.width, height: newSize.height),
-            display: true
+            display: false
         )
     }
 
@@ -314,6 +343,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.windows
                 .filter { $0.identifier?.rawValue == "onboarding" }
                 .forEach { $0.close() }
+            NotificationCenter.default.post(name: .switcherWillShow, object: nil)
             self.window.makeKeyAndOrderFront(nil)
             self.window.orderFrontRegardless()
         }
@@ -499,6 +529,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.closeWindow()
                 } else {
                     self.centerWindowHorizontally()
+                    NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                     self.window.orderFrontRegardless()
                 }
             }
@@ -551,7 +582,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         DispatchQueue.main.async {
                             windows[0].performAction(self.appState.mode)
                         }
-                        closeWindow()
+                        if self.appState.mode == .normal {
+                            self.closeWindow()
+                        }
                         appState.depth = 0
                         appState.typed = ""
                     } else {
@@ -608,6 +641,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         self.closeWindow()
                     } else {
                         self.centerWindowHorizontally()
+                        NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                         self.window.orderFrontRegardless()
                     }
                 }
@@ -619,9 +653,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func activeAppChanged() {
-        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != Bundle.main.bundleIdentifier
-        {
-            self.closeWindow()
+        DispatchQueue.main.async {
+            guard !self.suppressActiveAppCheck else { return }
+            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                != Bundle.main.bundleIdentifier
+            {
+                self.closeWindow()
+            }
         }
     }
 }

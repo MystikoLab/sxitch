@@ -28,6 +28,7 @@ struct sxitchApp: App {
             }
             Label("Version: \(Bundle.main.appVersion)", systemImage: "number.circle")
             Button("Show", systemImage: "eye.fill") {
+                NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                 appDelegate.window.makeKeyAndOrderFront(nil)
                 appDelegate.window.orderFrontRegardless()
             }

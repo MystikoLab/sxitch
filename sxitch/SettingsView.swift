@@ -13,6 +13,7 @@ extension KeyboardShortcuts.Name {
 extension Notification.Name {
     static let appHotkeyAdded = Notification.Name("appHotkeyAdded")
     static let onboardingCompleted = Notification.Name("onboardingCompleted")
+    static let switcherWillShow = Notification.Name("sxitch.switcherWillShow")
 }
 
 struct SettingsView: View {

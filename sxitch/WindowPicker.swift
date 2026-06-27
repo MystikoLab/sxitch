@@ -30,12 +30,10 @@ struct WindowInfo: Identifiable {
 
         case .quit:
             // Press the window's close button
-            var ref: CFTypeRef?
-            if AXUIElementCopyAttributeValue(
-                axElement, kAXCloseButtonAttribute as CFString, &ref) == .success,
-                let btn = ref
-            {
-                AXUIElementPerformAction(btn as! AXUIElement, kAXPressAction as CFString)
+            var pid: pid_t = 0
+            AXUIElementGetPid(axElement, &pid)
+            if pid != 0 {
+                NSRunningApplication(processIdentifier: pid)?.terminate()
             }
         }
     }
