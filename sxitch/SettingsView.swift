@@ -23,51 +23,30 @@ struct SettingsView: View {
     var accentColor: Color { resolvedAccentColor(from: accentColorHex) ?? .accentColor }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Custom tab bar — responds to accent colour
-            HStack(spacing: 0) {
-                ForEach(SettingsTab.allCases) { tab in
-                    Button {
-                        selectedTab = tab
-                    } label: {
-                        VStack(spacing: 5) {
-                            Image(systemName: tab.icon(isPro: usState.isPro))
-                                .font(.system(size: 20))
-                            Text(tab.title)
-                                .font(.caption)
-                        }
-                        .foregroundStyle(selectedTab == tab ? accentColor : .secondary)
-                        .frame(minWidth: 80)
-                        .padding(.vertical, 10)
-                        .background(
-                            selectedTab == tab
-                                ? accentColor.opacity(0.12)
-                                : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 8)
-                        )
-                        .animation(
-                            .spring(response: 0.25, dampingFraction: 0.7), value: selectedTab)
-                    }
-                    .buttonStyle(.plain)
+        TabView(selection: $selectedTab) {
+            GeneralSettingsView()
+                .tabItem {
+                    Label("General", systemImage: SettingsTab.general.icon)
                 }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
-            .background(.bar)
+                .tag(SettingsTab.general)
 
-            Divider()
-
-            // Tab content
-            Group {
-                switch selectedTab {
-                case .general: GeneralSettingsView()
-                case .theme: ThemeSettingsView()
-                case .activate: ActivateSettingsView()
-                case .advanced: AdvancedSettingsView()
+            ThemeSettingsView()
+                .tabItem {
+                    Label("Theme", systemImage: SettingsTab.theme.icon)
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .tag(SettingsTab.theme)
+
+            AdvancedSettingsView()
+                .tabItem {
+                    Label("Advanced", systemImage: SettingsTab.advanced.icon)
+                }
+                .tag(SettingsTab.advanced)
+
+            ActivateSettingsView()
+                .tabItem {
+                    Label("Activate", systemImage: usState.isPro ? "lock.open" : "lock")
+                }
+                .tag(SettingsTab.activate)
         }
         .frame(width: 800, height: 600)
         .tint(accentColor)
