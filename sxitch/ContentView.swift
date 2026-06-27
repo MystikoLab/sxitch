@@ -539,7 +539,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if filteredApps.count == 1 {
                     let singleApp = filteredApps[0]
                     let windows = fetchWindowsForApp(singleApp.app)
-                    if windows.count > 1 {
+                    let windowPickerEnabled = UserDefaults.standard.bool(
+                        forKey: "windowPickerEnabled")
+                    if windows.count > 1 && self.proState.isPro && windowPickerEnabled {
                         DispatchQueue.main.async {
                             self.appState.typed = ""
                             self.appState.depth = 0
