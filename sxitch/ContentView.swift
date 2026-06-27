@@ -171,7 +171,8 @@ struct ContentView: View {
 
     func handleAppTap(_ app: RunningApp) {
         let windows = fetchWindowsForApp(app.app)
-        if windows.count > 1 {
+        let windowPickerEnabled = UserDefaults.standard.bool(forKey: "windowPickerEnabled")
+        if windows.count > 1 && userState.shared.isPro && windowPickerEnabled {
             appState.drillDownApp = app.app
         } else if windows.count == 1 {
             windows[0].performAction(appState.mode)

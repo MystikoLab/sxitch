@@ -23,7 +23,7 @@ struct SettingsView: View {
     var accentColor: Color { resolvedAccentColor(from: accentColorHex) ?? .accentColor }
 
     var body: some View {
-        TabView(selection: $selectedTab) 2{
+        TabView(selection: $selectedTab) {
             GeneralSettingsView()
                 .tabItem {
                     Label("General", systemImage: SettingsTab.general.icon)
@@ -93,7 +93,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
 struct GeneralSettingsView: View {
     @AppStorage("launchAtLogin") private var launchAtLogin: Bool = true
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
+    @AppStorage("windowPickerEnabled") private var windowPickerEnabled: Bool = true
     @Environment(\.openWindow) private var openWindow
+    private var usState = userState.shared
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
     @State private var isLaunchAtLoginEnabled: Bool = {
         SMAppService.mainApp.status == .enabled
@@ -219,6 +221,23 @@ struct GeneralSettingsView: View {
                     Text("Space").tag(49)
                     Text("Tab").tag(48)
                     Text("Return").tag(36)
+                }
+            }
+            Section {
+                HStack {
+                    Toggle("Window Picker", isOn: $windowPickerEnabled)
+                        .disabled(!usState.isPro)
+                    if !usState.isPro {
+                        Spacer()
+                        Label("Pro", systemImage: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if !usState.isPro {
+                    Text("Upgrade to Pro to pick individual windows when an app has multiple open.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             Section {
