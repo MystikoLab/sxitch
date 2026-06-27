@@ -5,16 +5,15 @@
 //  Created by Umang on 22/6/26.
 //
 
-import SwiftUI
 import Combine
 import KeyboardShortcuts
+import SwiftUI
 
 enum AppMode {
     case hide
     case quit
     case normal
 }
-
 
 class AppState: ObservableObject {
     @Published var typed: String = ""
@@ -34,17 +33,17 @@ extension UserDefaults {
 struct ContentView: View {
     @State private var openApps: [RunningApp] = RunningApp.fetchRunningApps()
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
-    
+
     @Environment(\.openSettings) private var openSettings
     @Environment(\.scenePhase) private var scenePhase
-    
+
     @AppStorage("appBlacklists") var blacklist: [String] = []
     @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"]
-    
+
     @ObservedObject var appState: AppState
-    
+
     var appDelegate: AppDelegate
-    
+
     var body: some View {
         HStack {
             ForEach(openApps, id: \.id) { app in
@@ -57,13 +56,19 @@ struct ContentView: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.mode)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 30))
-        .frame(maxWidth: .infinity,alignment: .center)
-        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didLaunchApplicationNotification)) { note in
+        .frame(maxWidth: .infinity, alignment: .center)
+        .onReceive(
+            NSWorkspace.shared.notificationCenter.publisher(
+                for: NSWorkspace.didLaunchApplicationNotification)
+        ) { note in
             withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                 openApps = RunningApp.fetchRunningApps()
             }
         }
-        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didTerminateApplicationNotification)) { _ in
+        .onReceive(
+            NSWorkspace.shared.notificationCenter.publisher(
+                for: NSWorkspace.didTerminateApplicationNotification)
+        ) { _ in
             withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                 openApps = RunningApp.fetchRunningApps()
             }
@@ -87,19 +92,20 @@ struct ContentView: View {
             }
         }
     }
-    
+
     func appView(_ app: RunningApp) -> some View {
         var modifiedApp = app
         modifiedApp.depth = appState.typed.count
         modifiedApp.appMode = appState.mode
-        return modifiedApp
-            .transition(.asymmetric(
-                insertion: .scale(scale: 0.85).combined(with: .opacity),
-                removal: .scale(scale: 0.85).combined(with: .opacity)
-            ))
+        return
+            modifiedApp
+            .transition(
+                .asymmetric(
+                    insertion: .scale(scale: 0.85).combined(with: .opacity),
+                    removal: .scale(scale: 0.85).combined(with: .opacity)
+                ))
     }
-    
-    
+
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -110,42 +116,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionCheckTimer: Timer?
     var lastModifierKeyCode: Int64 = 0
     let keyCodeToChar: [Int64: Character] = [
-        0:"a",  11:"b", 8:"c",  2:"d",  14:"e", 3:"f",  5:"g",
-        4:"h",  34:"i", 38:"j", 40:"k", 37:"l", 46:"m", 45:"n",
-        31:"o", 35:"p", 12:"q", 15:"r", 1:"s",  17:"t", 32:"u",
-        9:"v",  13:"w", 7:"x",  16:"y", 6:"z"
+        0: "a", 11: "b", 8: "c", 2: "d", 14: "e", 3: "f", 5: "g",
+        4: "h", 34: "i", 38: "j", 40: "k", 37: "l", 46: "m", 45: "n",
+        31: "o", 35: "p", 12: "q", 15: "r", 1: "s", 17: "t", 32: "u",
+        9: "v", 13: "w", 7: "x", 16: "y", 6: "z",
     ]
-    
+
     var proState = userState.shared
-    
+
     let flagForKeyCode: [Int64: CGEventFlags] = [
-        58: .maskAlternate,    // left ⌥
-        61: .maskAlternate,    // right ⌥
-        55: .maskCommand,      // left ⌘
-        54: .maskCommand,      // right ⌘
-        56: .maskShift,        // left ⇧
-        60: .maskShift,        // right ⇧
-        59: .maskControl,      // left ⌃
-        62: .maskControl,      // right ⌃
-        57: .maskAlphaShift,   // caps lock
+        58: .maskAlternate,  // left ⌥
+        61: .maskAlternate,  // right ⌥
+        55: .maskCommand,  // left ⌘
+        54: .maskCommand,  // right ⌘
+        56: .maskShift,  // left ⇧
+        60: .maskShift,  // right ⇧
+        59: .maskControl,  // left ⌃
+        62: .maskControl,  // right ⌃
+        57: .maskAlphaShift,  // caps lock
     ]
 
     let altKeyCodes: Set<Int64> = [58, 61]
     let cmdKeyCodes: Set<Int64> = [55, 54]
     let shiftKeyCodes: Set<Int64> = [56, 60]
     let ctrlKeyCodes: Set<Int64> = [59, 62]
-    
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
     }
-    
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false
+    }
+
     func closeWindow() {
         appState.typed = ""
         appState.depth = 0
         appState.mode = .normal
         window.orderOut(nil)
     }
-    
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 0, height: 0),
@@ -160,28 +170,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.level = NSWindow.Level(NSWindow.Level.floating.rawValue + 200)
         window.isMovableByWindowBackground = true
         window.collectionBehavior = [.canJoinAllSpaces, .stationary]
-        
-        let contentView = NSHostingView(rootView: ContentView(appState: appState, appDelegate: self))
+
+        let contentView = NSHostingView(
+            rootView: ContentView(appState: appState, appDelegate: self))
         contentView.translatesAutoresizingMaskIntoConstraints = false
         window.contentView = contentView
-        
+
         window.hasShadow = true
         window.contentView?.wantsLayer = true
         window.contentView?.layer?.cornerRadius = 10
         window.contentView?.layer?.masksToBounds = true
-        
+
         window.setContentSize(contentView.fittingSize)
         window.center()
-        window.makeKeyAndOrderFront(nil)
-        
+
+        // Only show the switcher immediately if onboarding is already done
+        if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+            window.makeKeyAndOrderFront(nil)
+        }
+
+        // Show the switcher once the onboarding window signals it's done
+        NotificationCenter.default.addObserver(
+            forName: .onboardingCompleted, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            // Close any onboarding NSWindow
+            NSApp.windows
+                .filter { $0.identifier?.rawValue == "onboarding" }
+                .forEach { $0.close() }
+            self.window.makeKeyAndOrderFront(nil)
+            self.window.orderFrontRegardless()
+        }
+
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
             selector: #selector(activeAppChanged),
             name: NSWorkspace.didActivateApplicationNotification,
             object: nil
         )
-        
-        NotificationCenter.default.addObserver(forName: .appHotkeyAdded, object: nil, queue: .main) { note in
+
+        NotificationCenter.default.addObserver(forName: .appHotkeyAdded, object: nil, queue: .main)
+        { note in
             guard let bundleURL = note.object as? String else { return }
             Task { @MainActor in
                 KeyboardShortcuts.onKeyDown(for: .appLaunch(bundleURL)) {
@@ -192,29 +221,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
-        
+
         setupEventTap()
-        NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+        NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
+            [weak self] event in
             guard let self = self else { return }
             if self.window.isVisible {
                 self.closeWindow()
             }
         }
     }
-    
+
     func setupEventTap() {
         if let existing = eventTap, CGEvent.tapIsEnabled(tap: existing) {
             return
         }
-        
+
         guard AXIsProcessTrusted() else {
-            // Prompt the user once
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
-            AXIsProcessTrustedWithOptions(options)
-            
+            // Start polling silently — the onboarding page handles prompting the user
             // Start polling if not already doing so
             if permissionCheckTimer == nil {
-                permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
+                    [weak self] _ in
                     if AXIsProcessTrusted() {
                         self?.permissionCheckTimer?.invalidate()
                         self?.permissionCheckTimer = nil
@@ -224,45 +252,51 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return
         }
-        
+
         permissionCheckTimer?.invalidate()
         permissionCheckTimer = nil
-        
-        let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
-        
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: mask,
-            callback: { proxy, type, event, userInfo in
-                let delegate = Unmanaged<AppDelegate>.fromOpaque(userInfo!).takeUnretainedValue()
-                return delegate.handleEvent(proxy: proxy, type: type, event: event)
-            },
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
+
+        let mask: CGEventMask =
+            (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+
+        guard
+            let tap = CGEvent.tapCreate(
+                tap: .cgSessionEventTap,
+                place: .headInsertEventTap,
+                options: .defaultTap,
+                eventsOfInterest: mask,
+                callback: { proxy, type, event, userInfo in
+                    let delegate = Unmanaged<AppDelegate>.fromOpaque(userInfo!)
+                        .takeUnretainedValue()
+                    return delegate.handleEvent(proxy: proxy, type: type, event: event)
+                },
+                userInfo: Unmanaged.passUnretained(self).toOpaque()
+            )
+        else {
             print("Failed to create event tap")
             return
         }
-        
+
         eventTap = tap
         let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)  // ← .getMain() not .getCurrent()
         CGEvent.tapEnable(tap: tap, enable: true)
         print("Event tap created successfully")
     }
-    
-    func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+
+    func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<
+        CGEvent
+    >? {
         let flags = event.flags
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let savedModifier = UserDefaults.standard.integer(forKey: "hotkey_modifier")
         let savedKeycode = UserDefaults.standard.integer(forKey: "hotkey_keycode")
         let hotkeySided = UserDefaults.standard.bool(forKey: "hotkey_sided")
-        
+
         if type == .flagsChanged {
             lastModifierKeyCode = keyCode
         }
-        
+
         if keyCode == 53 && self.window.isVisible {
             if self.appState.typed == "" {
                 self.closeWindow()
@@ -272,12 +306,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return nil
         }
         // open settings panel
-        if self.window.isVisible && flags.contains(.maskCommand) && keyCode == 43  {
+        if self.window.isVisible && flags.contains(.maskCommand) && keyCode == 43 {
             self.closeWindow()
             openSettings()
             return nil
         }
-        
+
         if self.window.isVisible && flags.contains(.maskControl) && proState.isPro {
             if keyCode == 12 {
                 // `q` key
@@ -305,7 +339,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return nil
             }
         }
-        
+
         if proState.isPro {
             for bundleURL in UserDefaults.standard.appHotkeys.keys {
                 KeyboardShortcuts.onKeyDown(for: .appLaunch(bundleURL)) {
@@ -316,26 +350,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
-        
 
         let matchesModifier: Bool = {
             if hotkeySided {
                 return keyCode == savedModifier
             } else {
                 let k = Int64(savedModifier)
-                if altKeyCodes.contains(k)   { return altKeyCodes.contains(keyCode) }
-                if cmdKeyCodes.contains(k)   { return cmdKeyCodes.contains(keyCode) }
+                if altKeyCodes.contains(k) { return altKeyCodes.contains(keyCode) }
+                if cmdKeyCodes.contains(k) { return cmdKeyCodes.contains(keyCode) }
                 if shiftKeyCodes.contains(k) { return shiftKeyCodes.contains(keyCode) }
-                if ctrlKeyCodes.contains(k)  { return ctrlKeyCodes.contains(keyCode) }
-                if k == 57                   { return keyCode == 57 }  // caps lock
-                if k == 63                   { return keyCode == 63 }  // fn
+                if ctrlKeyCodes.contains(k) { return ctrlKeyCodes.contains(keyCode) }
+                if k == 57 { return keyCode == 57 }  // caps lock
+                if k == 63 { return keyCode == 63 }  // fn
                 return false
             }
         }()
 
         if savedKeycode == 256, matchesModifier,
-           let flag = flagForKeyCode[keyCode],
-           flags.contains(flag) {
+            let flag = flagForKeyCode[keyCode],
+            flags.contains(flag)
+        {
             DispatchQueue.main.async {
                 if self.window.isVisible {
                     self.closeWindow()
@@ -345,7 +379,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return nil
         }
-        
+
         if window.isVisible && flags == CGEventFlags(rawValue: 256) {
             if let letter = keyCodeToChar[keyCode] {
                 let candidate = self.appState.typed + "\(letter)"
@@ -382,23 +416,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             //                    return nil
             //                }
         }
-        
+
         if type == .keyDown {
             let modifierMatch: Bool = {
                 let k = Int64(savedModifier)
                 if hotkeySided {
                     return lastModifierKeyCode == k
                 } else {
-                    if altKeyCodes.contains(k)   { return flags.contains(.maskAlternate) }
-                    if cmdKeyCodes.contains(k)   { return flags.contains(.maskCommand) }
+                    if altKeyCodes.contains(k) { return flags.contains(.maskAlternate) }
+                    if cmdKeyCodes.contains(k) { return flags.contains(.maskCommand) }
                     if shiftKeyCodes.contains(k) { return flags.contains(.maskShift) }
-                    if ctrlKeyCodes.contains(k)  { return flags.contains(.maskControl) }
-                    if k == 57                   { return flags.contains(.maskAlphaShift) }
-                    if k == 63                   { return lastModifierKeyCode == 63 }
+                    if ctrlKeyCodes.contains(k) { return flags.contains(.maskControl) }
+                    if k == 57 { return flags.contains(.maskAlphaShift) }
+                    if k == 63 { return lastModifierKeyCode == 63 }
                     return false
                 }
             }()
-            
+
             if savedKeycode != 256 && modifierMatch && keyCode == Int64(savedKeycode) {
                 DispatchQueue.main.async {
                     if self.window.isVisible {
@@ -410,15 +444,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return nil
             }
         }
-        
+
         return Unmanaged.passUnretained(event)
     }
-    
-    
+
     @objc func activeAppChanged() {
-        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != Bundle.main.bundleIdentifier {
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != Bundle.main.bundleIdentifier
+        {
             self.closeWindow()
         }
     }
 }
-

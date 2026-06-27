@@ -1,7 +1,7 @@
-import SwiftUI
 import Combine
-import ServiceManagement
 import KeyboardShortcuts
+import ServiceManagement
+import SwiftUI
 
 // When the user adds a hotkey, register a name dynamically
 extension KeyboardShortcuts.Name {
@@ -12,15 +12,17 @@ extension KeyboardShortcuts.Name {
 
 extension Notification.Name {
     static let appHotkeyAdded = Notification.Name("appHotkeyAdded")
+    static let onboardingCompleted = Notification.Name("onboardingCompleted")
 }
 
 struct SettingsView: View {
     private var usState = userState.shared
-    var systemimg = if userState.shared.isPro {
-        "lock.open"
-    } else {
-        "lock"
-    }
+    var systemimg =
+        if userState.shared.isPro {
+            "lock.open"
+        } else {
+            "lock"
+        }
     var body: some View {
         TabView {
             Tab("General", systemImage: "gear") {
@@ -45,7 +47,7 @@ struct SettingsView: View {
                 window.standardWindowButton(.zoomButton)?.isHidden = true
             }
         }
-        
+
     }
 }
 
@@ -54,9 +56,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     case theme
     case advanced
     case activate
-    
+
     var id: String { self.rawValue }
-    
+
     var title: String {
         switch self {
         case .general: "General"
@@ -65,7 +67,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .activate: "Activate"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .general: "gear"
@@ -78,26 +80,28 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
 
 struct GeneralSettingsView: View {
     @AppStorage("launchAtLogin") private var launchAtLogin: Bool = true
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
+    @Environment(\.openWindow) private var openWindow
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
     @State private var isLaunchAtLoginEnabled: Bool = {
         SMAppService.mainApp.status == .enabled
     }()
-    
+
     @AppStorage("hotkey_modifier") private var savedModifier: Int = 58
     @AppStorage("hotkey_keycode") private var keycode: Int = 49
     @AppStorage("hotkey_sided") private var hotkeySided: Bool = false
-    
+
     private var selectedFamily: Int {
         switch savedModifier {
         case 58, 61: return 0
         case 55, 54: return 1
         case 56, 60: return 2
         case 59, 62: return 3
-        case 57:     return 4
-        default:     return 0
+        case 57: return 4
+        default: return 0
         }
     }
-    
+
     private func leftKeycode(for family: Int) -> Int {
         switch family {
         case 0: return 58
@@ -108,7 +112,7 @@ struct GeneralSettingsView: View {
         default: return 58
         }
     }
-    
+
     private func rightKeycode(for family: Int) -> Int {
         switch family {
         case 0: return 61
@@ -119,18 +123,25 @@ struct GeneralSettingsView: View {
         default: return 61
         }
     }
-    
+
     var body: some View {
         Form {
             Section("Permissions") {
                 HStack {
-                    Image(systemName: accessibilityGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                        .foregroundStyle(accessibilityGranted ? .green : .red)
-                    Text(accessibilityGranted ? "Accessibility granted" : "Accessibility not granted")
+                    Image(
+                        systemName: accessibilityGranted
+                            ? "checkmark.circle.fill" : "xmark.circle.fill"
+                    )
+                    .foregroundStyle(accessibilityGranted ? .green : .red)
+                    Text(
+                        accessibilityGranted ? "Accessibility granted" : "Accessibility not granted"
+                    )
                     Spacer()
                     if !accessibilityGranted {
                         Button("Request") {
-                            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
+                            let options =
+                                [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
+                                as CFDictionary
                             AXIsProcessTrustedWithOptions(options)
                         }
                     }
@@ -144,45 +155,53 @@ struct GeneralSettingsView: View {
                 }
             }
             Section("Hotkey") {
-                Picker("Modifier", selection: Binding(
-                    get: { selectedFamily },
-                    set: { newFamily in
-                        savedModifier = hotkeySided
-                        ? (savedModifier == rightKeycode(for: selectedFamily)
-                           ? rightKeycode(for: newFamily)
-                           : leftKeycode(for: newFamily))
-                        : leftKeycode(for: newFamily)
-                    }
-                )) {
+                Picker(
+                    "Modifier",
+                    selection: Binding(
+                        get: { selectedFamily },
+                        set: { newFamily in
+                            savedModifier =
+                                hotkeySided
+                                ? (savedModifier == rightKeycode(for: selectedFamily)
+                                    ? rightKeycode(for: newFamily)
+                                    : leftKeycode(for: newFamily))
+                                : leftKeycode(for: newFamily)
+                        }
+                    )
+                ) {
                     Text("⌥ Option").tag(0)
                     Text("⌘ Command").tag(1)
                     Text("⇧ Shift").tag(2)
                     Text("⌃ Control").tag(3)
                     Text("⇪ Caps Lock").tag(4)
                 }
-                
+
                 Toggle("Sided", isOn: $hotkeySided)
                     .onChange(of: hotkeySided) { _, newSided in
                         if !newSided {
                             savedModifier = leftKeycode(for: selectedFamily)
                         }
                     }
-                
+
                 if hotkeySided {
-                    Picker("Side", selection: Binding(
-                        get: { savedModifier == rightKeycode(for: selectedFamily) ? 1 : 0 },
-                        set: { side in
-                            savedModifier = side == 0
-                            ? leftKeycode(for: selectedFamily)
-                            : rightKeycode(for: selectedFamily)
-                        }
-                    )) {
+                    Picker(
+                        "Side",
+                        selection: Binding(
+                            get: { savedModifier == rightKeycode(for: selectedFamily) ? 1 : 0 },
+                            set: { side in
+                                savedModifier =
+                                    side == 0
+                                    ? leftKeycode(for: selectedFamily)
+                                    : rightKeycode(for: selectedFamily)
+                            }
+                        )
+                    ) {
                         Text("Left").tag(0)
                         Text("Right").tag(1)
                     }
                     .pickerStyle(.segmented)
                 }
-                
+
                 Picker("Key", selection: $keycode) {
                     Text("None").tag(256)
                     Text("Space").tag(49)
@@ -200,10 +219,28 @@ struct GeneralSettingsView: View {
                                 try SMAppService.mainApp.unregister()
                             }
                         } catch {
-                            print("Failed to update login item state: \(error.localizedDescription)")
+                            print(
+                                "Failed to update login item state: \(error.localizedDescription)")
                             isLaunchAtLoginEnabled = oldValue
                         }
                     }
+            }
+            Section("Setup") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Revisit the setup guide")
+                            .fontWeight(.medium)
+                        Text("Walk through permissions and usage tips again.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Open Guide") {
+                        hasCompletedOnboarding = false
+                        openWindow(id: "onboarding")
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
         }
         .padding()
@@ -259,7 +296,9 @@ struct ManagedListSection: View {
                     HStack {
                         Text(item)
                         Spacer()
-                        Button(role: .destructive) { remove(item) } label: {
+                        Button(role: .destructive) {
+                            remove(item)
+                        } label: {
                             Image(systemName: "trash")
                         }
                         .buttonStyle(.borderless)
@@ -285,8 +324,8 @@ struct ManagedListSection: View {
 // MARK: - Cleaned up AdvancedSettingsView
 struct AdvancedSettingsView: View {
     @AppStorage("appBlacklists") var blacklist: [String] = []
-    @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"];
-    
+    @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"]
+
     private var appState = userState.shared
 
     var body: some View {
@@ -307,7 +346,7 @@ struct AdvancedSettingsView: View {
                 emptyMessage: "No prefixes added yet.",
                 placeholder: "Prefix",
                 items: $prefixStrip
-            ) 
+            )
         }
         .padding()
         .formStyle(.grouped)
@@ -316,7 +355,7 @@ struct AdvancedSettingsView: View {
 
 struct AppHotkeySettingsView: View {
     @State private var hotkeys: AppHotkeys = UserDefaults.standard.appHotkeys
-    
+
     @State private var isRecording = false
     @State private var recordingMonitor: Any? = nil
 
@@ -330,16 +369,18 @@ struct AppHotkeySettingsView: View {
         .filter { $0.activationPolicy == .regular }
 
     let keyCodeToChar: [Int64: String] = [
-        0:"A", 11:"B", 8:"C", 2:"D", 14:"E", 3:"F", 5:"G",
-        4:"H", 34:"I", 38:"J", 40:"K", 37:"L", 46:"M", 45:"N",
-        31:"O", 35:"P", 12:"Q", 15:"R", 1:"S", 17:"T", 32:"U",
-        9:"V", 13:"W", 7:"X", 16:"Y", 6:"Z"
+        0: "A", 11: "B", 8: "C", 2: "D", 14: "E", 3: "F", 5: "G",
+        4: "H", 34: "I", 38: "J", 40: "K", 37: "L", 46: "M", 45: "N",
+        31: "O", 35: "P", 12: "Q", 15: "R", 1: "S", 17: "T", 32: "U",
+        9: "V", 13: "W", 7: "X", 16: "Y", 6: "Z",
     ]
 
     var body: some View {
-        Section(header: Text("App Launch Hotkeys"),
-                footer: Text("Shortcuts will launch the app even if it's not running.")) {
-            
+        Section(
+            header: Text("App Launch Hotkeys"),
+            footer: Text("Shortcuts will launch the app even if it's not running.")
+        ) {
+
             ForEach(Array(hotkeys.keys.sorted()), id: \.self) { bundleURL in
                 HStack {
                     Text(appName(for: bundleURL))
@@ -355,7 +396,7 @@ struct AppHotkeySettingsView: View {
                     .buttonStyle(.borderless)
                 }
             }
-            
+
             HStack {
                 Picker("App", selection: $chosenBundleURL) {
                     Text("Select an app…").tag("")
@@ -364,7 +405,7 @@ struct AppHotkeySettingsView: View {
                             .tag(app.bundleURL?.absoluteString ?? "")
                     }
                 }
-                
+
                 Button("Add") {
                     guard !chosenBundleURL.isEmpty else { return }
                     NotificationCenter.default.post(name: .appHotkeyAdded, object: chosenBundleURL)
@@ -409,9 +450,9 @@ struct ActivateSettingsView: View {
     @State private var licenseKey = ""
     @State private var isActivating = false
     @State private var errorMessage: String? = nil
-    
+
     private var appState = userState.shared
-    
+
     var body: some View {
         Form {
             Section(header: Text("License Status")) {
@@ -436,7 +477,7 @@ struct ActivateSettingsView: View {
                         }
                     }
                     .padding(.vertical, 4)
-                    
+
                     Button("Deactivate Device", role: .destructive) {
                         deactivateLicense()
                     }
@@ -449,23 +490,24 @@ struct ActivateSettingsView: View {
                     }
                 }
             }
-            
+
             if !appState.isPro {
                 Section(
                     header: Text("Activate Pro"),
-                    footer: Text("Enter the license key received upon purchase to unlock Pro features.")
+                    footer: Text(
+                        "Enter the license key received upon purchase to unlock Pro features.")
                 ) {
                     TextField("XXXX-XXXX-XXXX-XXXX", text: $licenseKey)
                         .disabled(isActivating || appState.isCheckingLicense)
                         .labelsHidden()
                         .textFieldStyle(.roundedBorder)
-                    
+
                     if let errorMessage = errorMessage {
                         Text(errorMessage)
                             .foregroundColor(.red)
                             .font(.caption)
                     }
-                    
+
                     Button(action: {
                         Task { await performActivation() }
                     }) {
@@ -476,24 +518,26 @@ struct ActivateSettingsView: View {
                             Text("Activate Key")
                         }
                     }
-                    .disabled(licenseKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isActivating)
+                    .disabled(
+                        licenseKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || isActivating)
                 }
             }
         }
         .padding()
-        .formStyle(.grouped) // Enforces matching macOS Settings style architecture
+        .formStyle(.grouped)  // Enforces matching macOS Settings style architecture
         .task {
             await appState.checkCurrentActivationStatus()
         }
     }
-    
+
     // MARK: - Actions
-    
+
     private func performActivation() async {
         isActivating = true
         errorMessage = nil
         let cleanedKey = licenseKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         do {
             let success = try await activateKey(key: cleanedKey)
             await MainActor.run {
@@ -513,7 +557,7 @@ struct ActivateSettingsView: View {
             }
         }
     }
-    
+
     private func deactivateLicense() {
         do {
             try deleteCredentials()
