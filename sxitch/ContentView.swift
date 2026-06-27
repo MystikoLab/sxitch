@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Combine
+import KeyboardShortcuts
 
 enum AppMode {
     case hide
@@ -19,6 +20,15 @@ class AppState: ObservableObject {
     @Published var typed: String = ""
     @Published var depth: Int = 0
     @Published var mode: AppMode = .normal
+}
+
+typealias AppHotkeys = [String: String]  // "keycode:modifier" → bundleIdentifier
+
+extension UserDefaults {
+    var appHotkeys: AppHotkeys {
+        get { (dictionary(forKey: "app_hotkeys") as? AppHotkeys) ?? [:] }
+        set { set(newValue, forKey: "app_hotkeys") }
+    }
 }
 
 struct ContentView: View {
@@ -171,6 +181,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
         
+        NotificationCenter.default.addObserver(forName: .appHotkeyAdded, object: nil, queue: .main) { note in
+            guard let bundleURL = note.object as? String else { return }
+            Task { @MainActor in
+                KeyboardShortcuts.onKeyDown(for: .appLaunch(bundleURL)) {
+                    guard let url = URL(string: bundleURL) else { return }
+                    let config = NSWorkspace.OpenConfiguration()
+                    config.activates = true
+                    NSWorkspace.shared.openApplication(at: url, configuration: config)
+                }
+            }
+        }
+        
         setupEventTap()
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self = self else { return }
@@ -284,6 +306,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         
+        if proState.isPro {
+            for bundleURL in UserDefaults.standard.appHotkeys.keys {
+                KeyboardShortcuts.onKeyDown(for: .appLaunch(bundleURL)) {
+                    guard let url = URL(string: bundleURL) else { return }
+                    let config = NSWorkspace.OpenConfiguration()
+                    config.activates = true
+                    NSWorkspace.shared.openApplication(at: url, configuration: config)
+                }
+            }
+        }
         
 
         let matchesModifier: Bool = {

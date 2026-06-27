@@ -1,6 +1,18 @@
 import SwiftUI
 import Combine
 import ServiceManagement
+import KeyboardShortcuts
+
+// When the user adds a hotkey, register a name dynamically
+extension KeyboardShortcuts.Name {
+    static func appLaunch(_ bundleURL: String) -> Self {
+        .init("appLaunch_\(bundleURL)")
+    }
+}
+
+extension Notification.Name {
+    static let appHotkeyAdded = Notification.Name("appHotkeyAdded")
+}
 
 struct SettingsView: View {
     private var usState = userState.shared
@@ -287,6 +299,7 @@ struct AdvancedSettingsView: View {
                     placeholder: "App name",
                     items: $blacklist
                 )
+                AppHotkeySettingsView()
             }
             ManagedListSection(
                 addHeader: "Strip Prefixes",
@@ -298,6 +311,97 @@ struct AdvancedSettingsView: View {
         }
         .padding()
         .formStyle(.grouped)
+    }
+}
+
+struct AppHotkeySettingsView: View {
+    @State private var hotkeys: AppHotkeys = UserDefaults.standard.appHotkeys
+    
+    @State private var isRecording = false
+    @State private var recordingMonitor: Any? = nil
+
+    // For the "add new" row
+    @State private var chosenBundleId: String = ""
+    @State private var pendingKeyLabel: String? = nil
+    @State private var pendingKeyCode: String? = nil
+    @State private var chosenBundleURL: String = ""
+
+    let runningApps = NSWorkspace.shared.runningApplications
+        .filter { $0.activationPolicy == .regular }
+
+    let keyCodeToChar: [Int64: String] = [
+        0:"A", 11:"B", 8:"C", 2:"D", 14:"E", 3:"F", 5:"G",
+        4:"H", 34:"I", 38:"J", 40:"K", 37:"L", 46:"M", 45:"N",
+        31:"O", 35:"P", 12:"Q", 15:"R", 1:"S", 17:"T", 32:"U",
+        9:"V", 13:"W", 7:"X", 16:"Y", 6:"Z"
+    ]
+
+    var body: some View {
+        Section(header: Text("App Launch Hotkeys"),
+                footer: Text("Shortcuts will launch the app even if it's not running.")) {
+            
+            ForEach(Array(hotkeys.keys.sorted()), id: \.self) { bundleURL in
+                HStack {
+                    Text(appName(for: bundleURL))
+                    Spacer()
+                    KeyboardShortcuts.Recorder(for: .appLaunch(bundleURL))
+                    Button(role: .destructive) {
+                        KeyboardShortcuts.reset(.appLaunch(bundleURL))
+                        hotkeys.removeValue(forKey: bundleURL)
+                        save()
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            
+            HStack {
+                Picker("App", selection: $chosenBundleURL) {
+                    Text("Select an app…").tag("")
+                    ForEach(runningApps, id: \.bundleURL) { app in
+                        Text(app.localizedName ?? "Unknown")
+                            .tag(app.bundleURL?.absoluteString ?? "")
+                    }
+                }
+                
+                Button("Add") {
+                    guard !chosenBundleURL.isEmpty else { return }
+                    NotificationCenter.default.post(name: .appHotkeyAdded, object: chosenBundleURL)
+                    hotkeys[chosenBundleURL] = chosenBundleURL
+                    UserDefaults.standard.appHotkeys = hotkeys
+                    chosenBundleURL = ""
+                }
+                .disabled(chosenBundleURL.isEmpty)
+            }
+        }
+    }
+
+    private func startRecording() {
+        isRecording = true
+        recordingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let keyCode = Int64(event.keyCode)
+            pendingKeyCode = "\(keyCode)"
+            pendingKeyLabel = keyCodeToChar[keyCode] ?? "?"
+            stopRecording()
+            return nil
+        }
+    }
+
+    private func stopRecording() {
+        isRecording = false
+        if let monitor = recordingMonitor {
+            NSEvent.removeMonitor(monitor)
+            recordingMonitor = nil
+        }
+    }
+
+    private func save() {
+        UserDefaults.standard.appHotkeys = hotkeys
+    }
+
+    private func appName(for bundleURL: String) -> String {
+        runningApps.first { $0.bundleURL?.absoluteString == bundleURL }?.localizedName ?? bundleURL
     }
 }
 
