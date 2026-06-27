@@ -10,7 +10,7 @@ import SwiftUI
 
 struct RunningApp: Identifiable, Equatable, View {
     static func == (lhs: RunningApp, rhs: RunningApp) -> Bool {
-        lhs.id == rhs.id
+        lhs.id == rhs.id && lhs.depth == rhs.depth && lhs.appMode == rhs.appMode
     }
     @AppStorage("appBlacklists") var blacklist: [String] = []
 
@@ -38,20 +38,14 @@ struct RunningApp: Identifiable, Equatable, View {
                     .resizable()
                     .frame(width: 36, height: 36)
 
-                if depth < self.appName.count {
-                    let stripped = self.appName.replacingOccurrences(of: " ", with: "")
-                    if depth < stripped.count {
-                        let charIndex = stripped.index(stripped.startIndex, offsetBy: depth)
-                        let singleCharString = String(stripped[charIndex])
-
-                        Text(singleCharString.uppercased())
-                            .foregroundStyle(appMode == .normal ? Color.primary : modeOverlayColor)
-                            .font(.caption2)
-                            .padding(4)
-                            .frame(width: 16, height: 16)
-                            .background(Color(nsColor: .windowBackgroundColor).opacity(0.8))
-                            .clipShape(RoundedRectangle(cornerRadius: 30))
-                    }
+                if let nextChar = self.appName.dropFirst(depth).first(where: { !$0.isWhitespace }) {
+                    Text(String(nextChar).uppercased())
+                        .foregroundStyle(appMode == .normal ? Color.primary : modeOverlayColor)
+                        .font(.caption2)
+                        .padding(4)
+                        .frame(width: 16, height: 16)
+                        .background(Color(nsColor: .windowBackgroundColor).opacity(0.8))
+                        .clipShape(RoundedRectangle(cornerRadius: 30))
                 }
             }
 
@@ -80,20 +74,14 @@ struct RunningApp: Identifiable, Equatable, View {
                     .resizable()
                     .frame(width: 60, height: 60)
 
-                if depth < self.appName.count {
-                    let stripped = self.appName.replacingOccurrences(of: " ", with: "")
-                    if depth < stripped.count {
-                        let charIndex = stripped.index(stripped.startIndex, offsetBy: depth)
-                        let singleCharString = String(stripped[charIndex])
-
-                        Text(singleCharString.uppercased())
-                            .foregroundStyle(appMode == .normal ? Color.primary : modeOverlayColor)
-                            .font(.callout)
-                            .padding(6)
-                            .frame(width: 20, height: 20)
-                            .background(Color(nsColor: .windowBackgroundColor).opacity(0.8))
-                            .clipShape(RoundedRectangle(cornerRadius: 30))
-                    }
+                if let nextChar = self.appName.dropFirst(depth).first(where: { !$0.isWhitespace }) {
+                    Text(String(nextChar).uppercased())
+                        .foregroundStyle(appMode == .normal ? Color.primary : modeOverlayColor)
+                        .font(.callout)
+                        .padding(6)
+                        .frame(width: 20, height: 20)
+                        .background(Color(nsColor: .windowBackgroundColor).opacity(0.8))
+                        .clipShape(RoundedRectangle(cornerRadius: 30))
                 }
             }
             Text(self.appName)

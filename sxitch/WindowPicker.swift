@@ -147,19 +147,18 @@ struct WindowPickerView: View {
                     .resizable()
                     .frame(width: 48, height: 48)
 
-                if !typed.isEmpty {
-                    let stripped = window.title.replacingOccurrences(of: " ", with: "")
-                    if typed.count < stripped.count {
-                        let charIndex = stripped.index(stripped.startIndex, offsetBy: typed.count)
-                        let badge = String(stripped[charIndex]).uppercased()
-                        Text(badge)
-                            .foregroundStyle(appMode == .normal ? Color.primary : modeColor)
-                            .font(.caption2)
-                            .padding(3)
-                            .frame(width: 14, height: 14)
-                            .background(Color(nsColor: .windowBackgroundColor).opacity(0.85))
-                            .clipShape(RoundedRectangle(cornerRadius: 30))
-                    }
+                if !typed.isEmpty,
+                    let nextChar = window.title.dropFirst(typed.count).first(where: {
+                        !$0.isWhitespace
+                    })
+                {
+                    Text(String(nextChar).uppercased())
+                        .foregroundStyle(appMode == .normal ? Color.primary : modeColor)
+                        .font(.caption2)
+                        .padding(3)
+                        .frame(width: 14, height: 14)
+                        .background(Color(nsColor: .windowBackgroundColor).opacity(0.85))
+                        .clipShape(RoundedRectangle(cornerRadius: 30))
                 }
             }
 
@@ -192,19 +191,18 @@ struct WindowPickerView: View {
                     .frame(width: 36, height: 36)
 
                 // Show the next character badge, same as the app picker
-                if !typed.isEmpty {
-                    let stripped = window.title.replacingOccurrences(of: " ", with: "")
-                    if typed.count < stripped.count {
-                        let charIndex = stripped.index(stripped.startIndex, offsetBy: typed.count)
-                        let badge = String(stripped[charIndex]).uppercased()
-                        Text(badge)
-                            .foregroundStyle(appMode == .normal ? Color.primary : modeColor)
-                            .font(.caption2)
-                            .padding(3)
-                            .frame(width: 14, height: 14)
-                            .background(Color(nsColor: .windowBackgroundColor).opacity(0.85))
-                            .clipShape(RoundedRectangle(cornerRadius: 30))
-                    }
+                if !typed.isEmpty,
+                    let nextChar = window.title.dropFirst(typed.count).first(where: {
+                        !$0.isWhitespace
+                    })
+                {
+                    Text(String(nextChar).uppercased())
+                        .foregroundStyle(appMode == .normal ? Color.primary : modeColor)
+                        .font(.caption2)
+                        .padding(3)
+                        .frame(width: 14, height: 14)
+                        .background(Color(nsColor: .windowBackgroundColor).opacity(0.85))
+                        .clipShape(RoundedRectangle(cornerRadius: 30))
                 }
             }
 
