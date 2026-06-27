@@ -17,28 +17,60 @@ extension Notification.Name {
 
 struct SettingsView: View {
     private var usState = userState.shared
-    var systemimg =
-        if userState.shared.isPro {
-            "lock.open"
-        } else {
-            "lock"
-        }
+    @AppStorage("accentColorHex") var accentColorHex: String = "system"
+    @State private var selectedTab: SettingsTab = .general
+
+    var accentColor: Color { resolvedAccentColor(from: accentColorHex) ?? .accentColor }
+
     var body: some View {
-        TabView {
-            Tab("General", systemImage: "gear") {
-                GeneralSettingsView()
+        VStack(spacing: 0) {
+            // Custom tab bar — responds to accent colour
+            HStack(spacing: 0) {
+                ForEach(SettingsTab.allCases) { tab in
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        VStack(spacing: 5) {
+                            Image(systemName: tab.icon(isPro: usState.isPro))
+                                .font(.system(size: 20))
+                            Text(tab.title)
+                                .font(.caption)
+                        }
+                        .foregroundStyle(selectedTab == tab ? accentColor : .secondary)
+                        .frame(minWidth: 80)
+                        .padding(.vertical, 10)
+                        .background(
+                            selectedTab == tab
+                                ? accentColor.opacity(0.12)
+                                : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 8)
+                        )
+                        .animation(
+                            .spring(response: 0.25, dampingFraction: 0.7), value: selectedTab)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            Tab("Theme", systemImage: "paintpalette.fill") {
-                ThemeSettingsView()
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(.bar)
+
+            Divider()
+
+            // Tab content
+            Group {
+                switch selectedTab {
+                case .general: GeneralSettingsView()
+                case .theme: ThemeSettingsView()
+                case .activate: ActivateSettingsView()
+                case .advanced: AdvancedSettingsView()
+                }
             }
-            Tab("Activate", systemImage: systemimg) {
-                ActivateSettingsView()
-            }
-            Tab("Advanced", systemImage: "slider.horizontal.3") {
-                AdvancedSettingsView()
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: 800, height: 600)
+        .tint(accentColor)
         .onAppear {
             DispatchQueue.main.async {
                 guard let window = NSApp.keyWindow else { return }
@@ -47,7 +79,6 @@ struct SettingsView: View {
                 window.standardWindowButton(.zoomButton)?.isHidden = true
             }
         }
-
     }
 }
 
@@ -68,12 +99,14 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    var icon: String {
+    var icon: String { icon(isPro: false) }
+
+    func icon(isPro: Bool) -> String {
         switch self {
         case .general: "gear"
         case .theme: "paintpalette.fill"
         case .advanced: "slider.horizontal.3"
-        case .activate: "lock"
+        case .activate: isPro ? "lock.open" : "lock"
         }
     }
 }
@@ -248,8 +281,87 @@ struct GeneralSettingsView: View {
     }
 }
 
+// MARK: - Helpers
+
+extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        min(max(self, range.lowerBound), range.upperBound)
+    }
+}
+
+// MARK: - Accent colour helpers
+
+extension Color {
+    init?(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        guard hex.count == 6 else { return nil }
+        var value: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&value)
+        self.init(
+            red: Double((value >> 16) & 0xFF) / 255,
+            green: Double((value >> 8) & 0xFF) / 255,
+            blue: Double(value & 0xFF) / 255
+        )
+    }
+
+    var hexString: String {
+        // Try sRGB first; fall back to deviceRGB; then read raw CGColor components
+        if let ns = NSColor(self).usingColorSpace(.sRGB) {
+            return String(
+                format: "%02X%02X%02X",
+                Int((ns.redComponent.clamped(to: 0...1) * 255).rounded()),
+                Int((ns.greenComponent.clamped(to: 0...1) * 255).rounded()),
+                Int((ns.blueComponent.clamped(to: 0...1) * 255).rounded())
+            )
+        }
+        if let ns = NSColor(self).usingColorSpace(.deviceRGB) {
+            return String(
+                format: "%02X%02X%02X",
+                Int((ns.redComponent.clamped(to: 0...1) * 255).rounded()),
+                Int((ns.greenComponent.clamped(to: 0...1) * 255).rounded()),
+                Int((ns.blueComponent.clamped(to: 0...1) * 255).rounded())
+            )
+        }
+        // Last resort: pull from CGColor
+        let cg = NSColor(self).cgColor
+        let cs = CGColorSpace(name: CGColorSpace.sRGB)!
+        if let converted = cg.converted(to: cs, intent: .defaultIntent, options: nil),
+            let c = converted.components, c.count >= 3
+        {
+            return String(
+                format: "%02X%02X%02X",
+                Int((c[0].clamped(to: 0...1) * 255).rounded()),
+                Int((c[1].clamped(to: 0...1) * 255).rounded()),
+                Int((c[2].clamped(to: 0...1) * 255).rounded())
+            )
+        }
+        return "0000FF"
+    }
+}
+
+func resolvedAccentColor(from hex: String) -> Color? {
+    guard hex != "system" else { return nil }
+    return Color(hex: hex)
+}
+
+// MARK: - Theme Settings
+
 struct ThemeSettingsView: View {
     @AppStorage("showMenuIcon") var showMenuIcon: Bool = true
+    @AppStorage("accentColorHex") var accentColorHex: String = "system"
+
+    private let presets: [(name: String, color: Color)] = [
+        ("Blue", .blue),
+        ("Purple", .purple),
+        ("Pink", .pink),
+        ("Red", .red),
+        ("Orange", .orange),
+        ("Yellow", .yellow),
+        ("Green", .green),
+        ("Mint", .mint),
+        ("Teal", .teal),
+        ("Indigo", .indigo),
+    ]
 
     var body: some View {
         Form {
@@ -258,9 +370,81 @@ struct ThemeSettingsView: View {
                     Text("Show menubar icon")
                 }
             }
+
+            Section("Accent Colour") {
+                HStack(spacing: 10) {
+                    // System default
+                    AccentSwatch(
+                        label: "System",
+                        isSelected: accentColorHex == "system"
+                    ) {
+                        ZStack {
+                            Circle().fill(
+                                AngularGradient(
+                                    colors: [
+                                        .blue, .purple, .pink, .red, .orange, .yellow, .green,
+                                        .blue,
+                                    ],
+                                    center: .center
+                                )
+                            )
+                        }
+                    } onTap: {
+                        accentColorHex = "system"
+                    }
+
+                    // Preset colours
+                    ForEach(presets, id: \.name) { preset in
+                        AccentSwatch(
+                            label: preset.name,
+                            isSelected: accentColorHex == preset.color.hexString
+                        ) {
+                            Circle().fill(preset.color)
+                        } onTap: {
+                            accentColorHex = preset.color.hexString
+                        }
+                    }
+
+                }
+                .padding(.vertical, 4)
+            }
         }
         .padding()
         .formStyle(.grouped)
+
+    }
+
+}
+
+struct AccentSwatch<Swatch: View>: View {
+    let label: String
+    let isSelected: Bool
+    @ViewBuilder let swatch: () -> Swatch
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            swatch()
+                .frame(width: 28, height: 28)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            Color.primary.opacity(isSelected ? 0.9 : 0.15),
+                            lineWidth: isSelected ? 2.5 : 1)
+                )
+                .overlay(
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(radius: 1)
+                        .opacity(isSelected ? 1 : 0)
+                )
+                .scaleEffect(isSelected ? 1.15 : 1)
+                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+        }
+        .buttonStyle(.plain)
+        .help(label)
     }
 }
 

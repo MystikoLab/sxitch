@@ -23,6 +23,7 @@ struct OnboardingLauncher: View {
 
 struct OnboardingView: View {
     @Binding var hasCompletedOnboarding: Bool
+    @AppStorage("accentColorHex") var accentColorHex: String = "system"
     @State private var currentPage: Int = 0
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
 
@@ -71,7 +72,8 @@ struct OnboardingView: View {
                         Circle()
                             .fill(
                                 index == currentPage
-                                    ? Color.accentColor : Color.secondary.opacity(0.4)
+                                    ? (resolvedAccentColor(from: accentColorHex) ?? .accentColor)
+                                    : Color.secondary.opacity(0.4)
                             )
                             .frame(
                                 width: index == currentPage ? 8 : 6,
@@ -120,12 +122,16 @@ struct OnboardingView: View {
             .background(.ultraThinMaterial)
         }
         .frame(width: 640, height: 480)
+        .tint(resolvedAccentColor(from: accentColorHex))
     }
 }
 
 // MARK: - Welcome Page
 
 struct WelcomePage: View {
+    @AppStorage("accentColorHex") var accentColorHex: String = "system"
+    var accentColor: Color { resolvedAccentColor(from: accentColorHex) ?? .accentColor }
+
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
@@ -134,7 +140,7 @@ struct WelcomePage: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 80, height: 80)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(accentColor)
                 .symbolRenderingMode(.hierarchical)
 
             VStack(spacing: 12) {
@@ -234,12 +240,14 @@ struct PermissionRow: View {
     let isGranted: Bool
     var required: Bool = false
     let action: () -> Void
+    @AppStorage("accentColorHex") var accentColorHex: String = "system"
+    var accentColor: Color { resolvedAccentColor(from: accentColorHex) ?? .accentColor }
 
     var body: some View {
         HStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.title2)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(accentColor)
                 .frame(width: 36)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -330,13 +338,15 @@ struct TutorialRow: View {
     let number: String
     let title: String
     let description: String
+    @AppStorage("accentColorHex") var accentColorHex: String = "system"
+    var accentColor: Color { resolvedAccentColor(from: accentColorHex) ?? .accentColor }
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             Text(number)
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(accentColor)
                 .frame(width: 36, alignment: .center)
 
             VStack(alignment: .leading, spacing: 4) {
