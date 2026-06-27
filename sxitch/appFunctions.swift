@@ -112,8 +112,8 @@ struct RunningApp: Identifiable, Equatable, View {
 
     static func fetchRunningApps() -> [RunningApp] {
         let usState = userState.shared
-        let blacklist = UserDefaults.standard.stringArray(forKey: "appBlacklists") ?? []
-        let prefixStrips = UserDefaults.standard.stringArray(forKey: "prefixStrips") ?? ["microsoft", "adobe"]
+        @AppStorage("appBlacklists") var blacklist: [String] = []
+        @AppStorage("prefixStrips") var prefixStrips: [String] = ["microsoft", "adobe"]
         return NSWorkspace.shared.runningApplications
             .map { app in
                 RunningApp(
