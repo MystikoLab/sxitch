@@ -208,7 +208,12 @@ struct PermissionsPage: View {
                     isGranted: screenRecordingGranted,
                     required: false,
                     action: {
-                        CGRequestScreenCaptureAccess()
+                        NSWorkspace.shared.open(
+                            URL(
+                                string:
+                                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+                            )!
+                        )
                     }
                 )
             }

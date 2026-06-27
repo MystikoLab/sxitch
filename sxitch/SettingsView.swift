@@ -23,7 +23,7 @@ struct SettingsView: View {
     var accentColor: Color { resolvedAccentColor(from: accentColorHex) ?? .accentColor }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: $selectedTab) 2{
             GeneralSettingsView()
                 .tabItem {
                     Label("General", systemImage: SettingsTab.general.icon)
@@ -328,6 +328,7 @@ func resolvedAccentColor(from hex: String) -> Color? {
 struct ThemeSettingsView: View {
     @AppStorage("showMenuIcon") var showMenuIcon: Bool = true
     @AppStorage("accentColorHex") var accentColorHex: String = "system"
+    @AppStorage("layoutStyle") var layoutStyle: String = "grid"
 
     private let presets: [(name: String, color: Color)] = [
         ("Blue", .blue),
@@ -348,6 +349,14 @@ struct ThemeSettingsView: View {
                 Toggle(isOn: $showMenuIcon) {
                     Text("Show menubar icon")
                 }
+            }
+
+            Section("Layout") {
+                Picker("View Style", selection: $layoutStyle) {
+                    Label("Grid", systemImage: "square.grid.2x2").tag("grid")
+                    Label("List", systemImage: "list.bullet").tag("list")
+                }
+                .pickerStyle(.segmented)
             }
 
             Section("Accent Colour") {

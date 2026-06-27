@@ -10,7 +10,7 @@ import SwiftUI
 
 struct RunningApp: Identifiable, View {
     @AppStorage("appBlacklists") var blacklist: [String] = []
-    
+
     var id: Int32 { app.processIdentifier }
     var appName: String
     var app: NSRunningApplication
@@ -18,6 +18,7 @@ struct RunningApp: Identifiable, View {
     var bundleUrl: URL?
     var depth: Int = 0
     var appMode: AppMode = .normal
+    var overrideTap: ((RunningApp) -> Void)? = nil
     var modeOverlayColor: Color {
         switch appMode {
         case .quit: return .red.opacity(0.7)
@@ -25,20 +26,63 @@ struct RunningApp: Identifiable, View {
         case .normal: return .clear
         }
     }
-    
+
+    /// Compact horizontal row used in list layout
+    var listBody: some View {
+        HStack(spacing: 12) {
+            ZStack(alignment: .topTrailing) {
+                Image(nsImage: self.icon)
+                    .resizable()
+                    .frame(width: 36, height: 36)
+
+                if depth < self.appName.count {
+                    let stripped = self.appName.replacingOccurrences(of: " ", with: "")
+                    if depth < stripped.count {
+                        let charIndex = stripped.index(stripped.startIndex, offsetBy: depth)
+                        let singleCharString = String(stripped[charIndex])
+
+                        Text(singleCharString.uppercased())
+                            .foregroundStyle(appMode == .normal ? Color.primary : modeOverlayColor)
+                            .font(.caption2)
+                            .padding(4)
+                            .frame(width: 16, height: 16)
+                            .background(Color(nsColor: .windowBackgroundColor).opacity(0.8))
+                            .clipShape(RoundedRectangle(cornerRadius: 30))
+                    }
+                }
+            }
+
+            Text(self.appName)
+                .opacity(0.7)
+                .foregroundStyle(appMode == .normal ? Color.primary : modeOverlayColor)
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let override = overrideTap {
+                override(self)
+            } else {
+                self.performAction(action: appMode)
+            }
+        }
+    }
+
     var body: some View {
         VStack {
             ZStack(alignment: .topTrailing) {
                 Image(nsImage: self.icon)
                     .resizable()
                     .frame(width: 60, height: 60)
-                
+
                 if depth < self.appName.count {
                     let stripped = self.appName.replacingOccurrences(of: " ", with: "")
                     if depth < stripped.count {
                         let charIndex = stripped.index(stripped.startIndex, offsetBy: depth)
                         let singleCharString = String(stripped[charIndex])
-                        
+
                         Text(singleCharString.uppercased())
                             .foregroundStyle(appMode == .normal ? Color.primary : modeOverlayColor)
                             .font(.callout)
@@ -55,10 +99,14 @@ struct RunningApp: Identifiable, View {
         }
         .padding(20)
         .onTapGesture {
-            self.performAction(action: appMode)
+            if let override = overrideTap {
+                override(self)
+            } else {
+                self.performAction(action: appMode)
+            }
         }
     }
-    
+
     static func fetchRunningApps() -> [RunningApp] {
         let usState = userState.shared
         @AppStorage("appBlacklists") var blacklist: [String] = []
@@ -76,19 +124,20 @@ struct RunningApp: Identifiable, View {
                 var app = app
                 for prefix in prefixStrips {
                     if app.appName.lowercased().hasPrefix(prefix.lowercased()) {
-                        app.appName = String(app.appName.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                        app.appName = String(app.appName.dropFirst(prefix.count))
+                            .trimmingCharacters(in: .whitespaces)
                         break
                     }
                 }
                 return app
             }
             .filter { app in
-                return app.app.activationPolicy == .regular &&
-                ( !blacklist.contains(app.appName.lowercased()) || !usState.isPro )
+                return app.app.activationPolicy == .regular
+                    && (!blacklist.contains(app.appName.lowercased()) || !usState.isPro)
             }
-            .sorted{ $0.appName < $1.appName }
+            .sorted { $0.appName < $1.appName }
     }
-    
+
     func performAction(action: AppMode) {
         switch action {
         case .normal: self.openApp()
@@ -96,15 +145,15 @@ struct RunningApp: Identifiable, View {
         case .quit: self.quitApp()
         }
     }
-    
+
     func hideApp() {
         self.app.hide()
     }
-    
+
     func quitApp() {
         self.app.terminate()
     }
-    
+
     func openApp() {
         if let bundleUrl = self.bundleUrl {
             NSWorkspace.shared.open(bundleUrl)

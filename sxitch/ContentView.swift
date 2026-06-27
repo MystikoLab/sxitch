@@ -19,6 +19,7 @@ class AppState: ObservableObject {
     @Published var typed: String = ""
     @Published var depth: Int = 0
     @Published var mode: AppMode = .normal
+    @Published var drillDownApp: NSRunningApplication? = nil
 }
 
 typealias AppHotkeys = [String: String]  // "keycode:modifier" → bundleIdentifier
@@ -39,57 +40,145 @@ struct ContentView: View {
 
     @AppStorage("appBlacklists") var blacklist: [String] = []
     @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"]
+    @AppStorage("layoutStyle") var layoutStyle: String = "grid"
 
     @ObservedObject var appState: AppState
+    @State private var drillDownWindows: [WindowInfo] = []
 
     var appDelegate: AppDelegate
 
-    var body: some View {
-        HStack {
-            ForEach(openApps, id: \.id) { app in
-                if app.appName.lowercased().starts(with: appState.typed.lowercased()) {
+    @ViewBuilder
+    private var appLayout: some View {
+        if let drillApp = appState.drillDownApp {
+            WindowPickerView(
+                windows: drillDownWindows,
+                appName: drillApp.localizedName ?? "Unknown",
+                appIcon: drillApp.icon ?? NSImage(),
+                typed: appState.typed,
+                appMode: appState.mode
+            ) {
+                appDelegate.closeWindow()
+            }
+        } else if layoutStyle == "list" {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(openApps, id: \.id) { app in
+                        listRow(app)
+                    }
+                }
+            }
+            .frame(width: 300)
+            .frame(maxHeight: 400)
+        } else {
+            HStack {
+                ForEach(
+                    openApps.filter {
+                        $0.appName.lowercased().starts(with: appState.typed.lowercased())
+                    }, id: \.id
+                ) { app in
                     appView(app)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .center)
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.typed)
-        .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.mode)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 30))
-        .frame(maxWidth: .infinity, alignment: .center)
-        .onReceive(
-            NSWorkspace.shared.notificationCenter.publisher(
-                for: NSWorkspace.didLaunchApplicationNotification)
-        ) { note in
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+    }
+
+    var body: some View {
+        appLayout
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.typed)
+            .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.mode)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 30))
+            .onReceive(
+                NSWorkspace.shared.notificationCenter.publisher(
+                    for: NSWorkspace.didLaunchApplicationNotification)
+            ) { note in
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                    openApps = RunningApp.fetchRunningApps()
+                }
+            }
+            .onReceive(
+                NSWorkspace.shared.notificationCenter.publisher(
+                    for: NSWorkspace.didTerminateApplicationNotification)
+            ) { _ in
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                    openApps = RunningApp.fetchRunningApps()
+                }
+            }
+            .onKeyPress(.escape) {
+                if appState.drillDownApp != nil {
+                    if appState.typed.isEmpty {
+                        appState.drillDownApp = nil
+                    } else {
+                        appState.typed = ""
+                    }
+                } else if !appState.typed.isEmpty {
+                    appState.typed = ""
+                } else {
+                    appDelegate.closeWindow()
+                }
+                return KeyPress.Result.handled
+            }
+            .onChange(of: blacklist) { _, _ in
                 openApps = RunningApp.fetchRunningApps()
             }
-        }
-        .onReceive(
-            NSWorkspace.shared.notificationCenter.publisher(
-                for: NSWorkspace.didTerminateApplicationNotification)
-        ) { _ in
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+            .onChange(of: prefixStrip) { _, _ in
                 openApps = RunningApp.fetchRunningApps()
             }
-        }
-        .onKeyPress(.escape) {
-            if !self.appState.typed.isEmpty {
-                self.appState.typed = ""
-            } else {
-                appDelegate.closeWindow()
+            .onChange(of: layoutStyle) { _, _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    appDelegate.resizeWindowToFit()
+                }
             }
-            return KeyPress.Result.handled
-        }
-        .onChange(of: blacklist) { _, _ in
-            openApps = RunningApp.fetchRunningApps()
-        }
-        .onChange(of: prefixStrip) { _, _ in
-            openApps = RunningApp.fetchRunningApps()
-        }.task {
-            if !userState.shared.isPro {
-                await userState.shared.checkCurrentActivationStatus()
+            .onChange(of: appState.drillDownApp) { _, newApp in
+                if let app = newApp {
+                    drillDownWindows = fetchWindowsForApp(app)
+                    appState.typed = ""
+                } else {
+                    drillDownWindows = []
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    appDelegate.resizeWindowToFit()
+                }
             }
+            .task {
+                if !userState.shared.isPro {
+                    await userState.shared.checkCurrentActivationStatus()
+                }
+            }
+    }
+
+    @ViewBuilder
+    func listRow(_ app: RunningApp) -> some View {
+        if app.appName.lowercased().starts(with: appState.typed.lowercased()) {
+            appListView(app)
+            Divider().opacity(0.4)
+        }
+    }
+
+    func appListView(_ app: RunningApp) -> some View {
+        var modifiedApp = app
+        modifiedApp.depth = appState.typed.count
+        modifiedApp.appMode = appState.mode
+        modifiedApp.overrideTap = { [self] tapped in handleAppTap(tapped) }
+        return modifiedApp.listBody
+            .transition(
+                .asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .move(edge: .top).combined(with: .opacity)
+                ))
+    }
+
+    func handleAppTap(_ app: RunningApp) {
+        let windows = fetchWindowsForApp(app.app)
+        if windows.count > 1 {
+            appState.drillDownApp = app.app
+        } else if windows.count == 1 {
+            windows[0].performAction(appState.mode)
+            appDelegate.closeWindow()
+        } else {
+            app.performAction(action: appState.mode)
+            if appState.mode == .normal { appDelegate.closeWindow() }
         }
     }
 
@@ -97,6 +186,7 @@ struct ContentView: View {
         var modifiedApp = app
         modifiedApp.depth = appState.typed.count
         modifiedApp.appMode = appState.mode
+        modifiedApp.overrideTap = { [self] tapped in handleAppTap(tapped) }
         return
             modifiedApp
             .transition(
@@ -153,7 +243,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.typed = ""
         appState.depth = 0
         appState.mode = .normal
+        appState.drillDownApp = nil
         window.orderOut(nil)
+    }
+
+    func centerWindowHorizontally() {
+        let screen = window.screen ?? NSScreen.main
+        let screenWidth = screen?.frame.width ?? 0
+        let currentFrame = window.frame
+        let newX = (screenWidth - currentFrame.width) / 2
+        window.setFrameOrigin(NSPoint(x: newX, y: currentFrame.minY))
+    }
+
+    func resizeWindowToFit() {
+        guard let hostingView = window.contentView else { return }
+        let newSize = hostingView.fittingSize
+        guard newSize.width > 0, newSize.height > 0 else { return }
+        let currentFrame = window.frame
+        let screen = window.screen ?? NSScreen.main
+        let screenWidth = screen?.frame.width ?? 0
+        let newX = (screenWidth - newSize.width) / 2
+        // Anchor to the top edge so height changes grow downward, not upward
+        let newY = currentFrame.maxY - newSize.height
+        window.setFrame(
+            NSRect(x: newX, y: newY, width: newSize.width, height: newSize.height),
+            display: true
+        )
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -298,10 +413,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if keyCode == 53 && self.window.isVisible {
-            if self.appState.typed == "" {
-                self.closeWindow()
-            } else {
-                self.appState.typed = ""
+            DispatchQueue.main.async {
+                if self.appState.drillDownApp != nil {
+                    if self.appState.typed.isEmpty {
+                        self.appState.drillDownApp = nil
+                    } else {
+                        self.appState.typed = ""
+                    }
+                } else if self.appState.typed.isEmpty {
+                    self.closeWindow()
+                } else {
+                    self.appState.typed = ""
+                }
             }
             return nil
         }
@@ -374,6 +497,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if self.window.isVisible {
                     self.closeWindow()
                 } else {
+                    self.centerWindowHorizontally()
                     self.window.orderFrontRegardless()
                 }
             }
@@ -383,18 +507,60 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if window.isVisible && flags == CGEventFlags(rawValue: 256) {
             if let letter = keyCodeToChar[keyCode] {
                 let candidate = self.appState.typed + "\(letter)"
+
+                // ── Window picking mode ────────────────────────────────────
+                if let drillApp = self.appState.drillDownApp {
+                    let allWindows = fetchWindowsForApp(drillApp)
+                    let matchedWindows = allWindows.filter {
+                        $0.title.lowercased().starts(with: candidate.lowercased())
+                    }
+                    if matchedWindows.count == 1 {
+                        DispatchQueue.main.async {
+                            matchedWindows[0].performAction(self.appState.mode)
+                            self.closeWindow()
+                        }
+                        appState.depth = 0
+                        appState.typed = ""
+                    } else if !matchedWindows.isEmpty {
+                        DispatchQueue.main.async {
+                            self.appState.typed = candidate
+                            self.appState.depth += 1
+                        }
+                    }
+                    // if nothing matches, swallow the keystroke silently
+                    return nil
+                }
+
+                // ── App picking mode ───────────────────────────────────────
                 let filteredApps = RunningApp.fetchRunningApps().filter { app in
                     app.appName.lowercased().starts(with: candidate.lowercased())
                 }
                 if filteredApps.count == 1 {
-                    DispatchQueue.main.async {
-                        filteredApps[0].performAction(action: self.appState.mode)
-                    }
-                    if self.appState.mode == .normal {
+                    let singleApp = filteredApps[0]
+                    let windows = fetchWindowsForApp(singleApp.app)
+                    if windows.count > 1 {
+                        DispatchQueue.main.async {
+                            self.appState.typed = ""
+                            self.appState.depth = 0
+                            self.appState.drillDownApp = singleApp.app
+                        }
+                    } else if windows.count == 1 {
+                        DispatchQueue.main.async {
+                            windows[0].performAction(self.appState.mode)
+                        }
                         closeWindow()
+                        appState.depth = 0
+                        appState.typed = ""
+                    } else {
+                        DispatchQueue.main.async {
+                            singleApp.performAction(action: self.appState.mode)
+                        }
+                        if self.appState.mode == .normal {
+                            closeWindow()
+                        }
+                        appState.depth = 0
+                        appState.typed = ""
                     }
-                    appState.depth = 0
-                    appState.typed = ""
                 } else {
                     DispatchQueue.main.async {
                         self.appState.typed = candidate
@@ -438,6 +604,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     if self.window.isVisible {
                         self.closeWindow()
                     } else {
+                        self.centerWindowHorizontally()
                         self.window.orderFrontRegardless()
                     }
                 }
