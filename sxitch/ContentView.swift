@@ -89,7 +89,7 @@ struct ContentView: View {
         appLayout
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.typed)
             .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.mode)
-            .background(.ultraThinMaterial)
+            .modernMacBackground()
             .clipShape(RoundedRectangle(cornerRadius: 30))
             .onReceive(
                 NSWorkspace.shared.notificationCenter.publisher(
@@ -223,6 +223,20 @@ struct ContentView: View {
 
 }
 
+import SwiftUI
+
+extension View {
+    @ViewBuilder
+    func modernMacBackground() -> some View {
+        if #available(macOS 27.0, *) {
+            self.background(.ultraThinMaterial)
+        } else {
+            // Your manual fallback for older macOS versions
+            self.background(.regularMaterial)
+        }
+    }
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     @Environment(\.openSettings) private var openSettings
     var appState = AppState()
@@ -311,7 +325,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         (window as! NSPanel).isFloatingPanel = true
         window.isOpaque = false
         window.backgroundColor = .clear
-        //window.level = NSWindow.level(window.level.rawValue + 100)
         window.level = NSWindow.Level(NSWindow.Level.floating.rawValue + 200)
         window.isMovableByWindowBackground = true
         window.collectionBehavior = [.canJoinAllSpaces, .stationary]
@@ -528,7 +541,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if self.window.isVisible {
                     self.closeWindow()
                 } else {
-                    self.centerWindowHorizontally()
+                    // 1. Grab a dummy point on the mouse's current screen
+                    let activeScreen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+                    if let screenFrame = activeScreen?.frame {
+                        // 2. Warp the window origin to the active screen instantly (offscreen/hidden)
+                        self.window.setFrameOrigin(screenFrame.origin)
+                    }
+                    
+                    // 3. Let AppKit handle the centering geometry natively
+                    self.window.center()
+                    
                     NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                     self.window.orderFrontRegardless()
                 }

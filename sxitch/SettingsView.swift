@@ -51,14 +51,6 @@ struct SettingsView: View {
         }
         .frame(width: 800, height: 600)
         .tint(accentColor)
-        .onAppear {
-            DispatchQueue.main.async {
-                guard let window = NSApp.keyWindow else { return }
-                window.standardWindowButton(.closeButton)?.isHidden = true
-                window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-                window.standardWindowButton(.zoomButton)?.isHidden = true
-            }
-        }
     }
 }
 
@@ -513,7 +505,6 @@ struct ManagedListSection: View {
     }
 }
 
-// MARK: - Cleaned up AdvancedSettingsView
 struct AdvancedSettingsView: View {
     @AppStorage("appBlacklists") var blacklist: [String] = []
     @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"]
