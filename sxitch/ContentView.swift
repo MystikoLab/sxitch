@@ -81,7 +81,7 @@ struct ContentView: View {
                 }
             }
             .id(appState.mode)
-            .frame(maxWidth: .infinity, alignment: .center)
+            .frame(alignment: .center)
         }
     }
 

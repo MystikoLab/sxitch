@@ -78,8 +78,8 @@ struct RunningApp: Identifiable, Equatable, View {
                     Text(String(nextChar).uppercased())
                         .foregroundStyle(appMode == .normal ? Color.primary : modeOverlayColor)
                         .font(.callout)
-                        .padding(6)
-                        .frame(width: 20, height: 20)
+                        .padding(3)
+                        .frame(width: 23, height: 23)
                         .background(Color(nsColor: .windowBackgroundColor).opacity(0.8))
                         .clipShape(RoundedRectangle(cornerRadius: 30))
                 }
@@ -88,6 +88,7 @@ struct RunningApp: Identifiable, Equatable, View {
                 .opacity(0.7)
                 .foregroundStyle(appMode == .normal ? Color.primary : modeOverlayColor)
         }
+        .frame(maxWidth: 60)
         .padding(20)
         .onTapGesture {
             if let override = overrideTap {
