@@ -104,41 +104,94 @@ struct GeneralSettingsView: View {
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
     @State private var isLaunchAtLoginEnabled: Bool = SMAppService.mainApp.status == .enabled
 
-    @AppStorage("hotkey_modifier") private var savedModifier: Int = 58
+    @AppStorage("hotkey_modifier_config") private var modifierConfig: String = "1:right"
     @AppStorage("hotkey_keycode") private var keycode: Int = 49
-    @AppStorage("hotkey_sided") private var hotkeySided: Bool = false
 
-    private var selectedFamily: Int {
-        switch savedModifier {
-        case 58, 61: return 0
-        case 55, 54: return 1
-        case 56, 60: return 2
-        case 59, 62: return 3
-        case 57: return 4
-        default: return 0
+    private func stateFor(family: Int, side: String) -> Int {
+        for entry in modifierConfig.split(separator: ",") {
+            let parts = entry.split(separator: ":")
+            guard parts.count == 2, let f = Int(parts[0]), f == family else { continue }
+            let s = String(parts[1])
+            if s == side { return 1 }
+            if s == "either" { return 2 }
         }
+        return 0
     }
 
-    private func leftKeycode(for family: Int) -> Int {
-        switch family {
-        case 0: return 58
-        case 1: return 55
-        case 2: return 56
-        case 3: return 59
-        case 4: return 57
-        default: return 58
+    private func cycleKey(family: Int, side: String) {
+        let current = stateFor(family: family, side: side)
+        var entries = modifierConfig.split(separator: ",").compactMap { entry -> (Int, String)? in
+            let parts = entry.split(separator: ":")
+            guard parts.count == 2, let f = Int(parts[0]) else { return nil }
+            return (f, String(parts[1]))
         }
+        entries.removeAll { $0.0 == family }
+        if current == 0 {
+            entries.append((family, side))
+        } else if current == 1 {
+            entries.append((family, "either"))
+        }
+        modifierConfig = entries.map { "\($0.0):\($0.1)" }.joined(separator: ",")
     }
 
-    private func rightKeycode(for family: Int) -> Int {
-        switch family {
-        case 0: return 61
-        case 1: return 54
-        case 2: return 60
-        case 3: return 62
-        case 4: return 57
-        default: return 61
+    private let keyNames: [Int: String] = [0: "Option", 1: "Command", 2: "Shift", 3: "Control"]
+    private let keySymbols: [Int: String] = [0: "⌥", 1: "⌘", 2: "⇧", 3: "⌃"]
+
+    @ViewBuilder
+    private func keyboardKeyView(family: Int, side: String, width: CGFloat? = nil) -> some View {
+        let accent = resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system") ?? .accentColor
+        let stateVal = stateFor(family: family, side: side)
+        let symbol = keySymbols[family] ?? ""
+        let name = keyNames[family] ?? ""
+        let modeText: String = {
+            switch stateVal {
+            case 0: return "off"
+            case 1: return side == "left" ? "◀" : "▶"
+            case 2: return "⇔"
+            default: return ""
+            }
+        }()
+        Button {
+            cycleKey(family: family, side: side)
+        } label: {
+            VStack(spacing: 0) {
+                Text(symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                Text(name)
+                    .font(.system(size: 8, weight: .medium))
+                    .lineLimit(1)
+                Text(modeText)
+                    .font(.system(size: 7, weight: .bold))
+                    .lineLimit(1)
+                    .opacity(stateVal == 0 ? 0.35 : 1)
+                    .padding(.top, 1)
+            }
+            .frame(minHeight: 44)
+            .frame(maxWidth: width == nil ? .infinity : width)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(stateVal == 0 ? Color(nsColor: .controlBackgroundColor) :
+                          stateVal == 1 ? accent :
+                          accent.opacity(0.12))
+            )
+            .foregroundColor(stateVal == 0 ? .primary :
+                             stateVal == 1 ? .white :
+                             accent)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(stateVal == 0 ? Color(nsColor: .separatorColor).opacity(0.6) :
+                            stateVal == 1 ? accent :
+                            accent.opacity(0.6),
+                            lineWidth: stateVal == 0 ? 0.5 : 2)
+            )
         }
+        .buttonStyle(.plain)
+        .help(stateVal == 0 ? "\(name) — off" :
+              stateVal == 1 ? "\(name) — \(side) only" :
+              "\(name) — either")
     }
 
     var body: some View {
@@ -172,51 +225,32 @@ struct GeneralSettingsView: View {
                 }
             }
             Section("Hotkey") {
-                Picker(
-                    "Modifier",
-                    selection: Binding(
-                        get: { selectedFamily },
-                        set: { newFamily in
-                            savedModifier =
-                                hotkeySided
-                                    ? (savedModifier == rightKeycode(for: selectedFamily)
-                                        ? rightKeycode(for: newFamily)
-                                        : leftKeycode(for: newFamily))
-                                    : leftKeycode(for: newFamily)
-                        }
-                    )
-                ) {
-                    Text("⌥ Option").tag(0)
-                    Text("⌘ Command").tag(1)
-                    Text("⇧ Shift").tag(2)
-                    Text("⌃ Control").tag(3)
-                    Text("⇪ Caps Lock").tag(4)
-                }
-
-                Toggle("Sided", isOn: $hotkeySided)
-                    .onChange(of: hotkeySided) { _, newSided in
-                        if !newSided {
-                            savedModifier = leftKeycode(for: selectedFamily)
-                        }
+                VStack(spacing: 5) {
+                    HStack(spacing: 5) {
+                        keyboardKeyView(family: 2, side: "left", width: 110)
+                        Spacer()
+                        keyboardKeyView(family: 2, side: "right", width: 110)
                     }
-
-                if hotkeySided {
-                    Picker(
-                        "Side",
-                        selection: Binding(
-                            get: { savedModifier == rightKeycode(for: selectedFamily) ? 1 : 0 },
-                            set: { side in
-                                savedModifier =
-                                    side == 0
-                                        ? leftKeycode(for: selectedFamily)
-                                        : rightKeycode(for: selectedFamily)
-                            }
-                        )
-                    ) {
-                        Text("Left").tag(0)
-                        Text("Right").tag(1)
+                    HStack(spacing: 5) {
+                        keyboardKeyView(family: 3, side: "left", width: 60)
+                        keyboardKeyView(family: 0, side: "left", width: 60)
+                        keyboardKeyView(family: 1, side: "left", width: 90)
+                        Text("space")
+                            .font(.system(size: 10, weight: .regular))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .padding(.vertical, 5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color(nsColor: .controlBackgroundColor))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
+                            )
+                        keyboardKeyView(family: 1, side: "right", width: 90)
+                        keyboardKeyView(family: 0, side: "right", width: 60)
                     }
-                    .pickerStyle(.segmented)
                 }
 
                 Picker("Key", selection: $keycode) {
@@ -281,6 +315,47 @@ struct GeneralSettingsView: View {
         }
         .padding()
         .formStyle(.grouped)
+        .onAppear {
+            if UserDefaults.standard.object(forKey: "hotkey_modifier_config") == nil {
+                let oldStr = UserDefaults.standard.string(forKey: "hotkey_modifiers") ?? ""
+                if oldStr.isEmpty {
+                    let oldValue = UserDefaults.standard.integer(forKey: "hotkey_modifier")
+                    if oldValue > 0 {
+                        let family: Int = {
+                            switch oldValue {
+                            case 58, 61: return 0
+                            case 55, 54: return 1
+                            case 56, 60: return 2
+                            case 59, 62: return 3
+                            case 57: return 4
+                            default: return 0
+                            }
+                        }()
+                        let rightCodes = [61, 54, 60, 62, 57]
+                        let side = oldValue == rightCodes[family] ? "right" : "left"
+                        let sided = UserDefaults.standard.bool(forKey: "hotkey_sided")
+                        modifierConfig = "\(family):\(sided ? side : "either")"
+                    }
+                } else {
+                    let entries = oldStr.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }.map { code -> String in
+                        let family: Int = {
+                            switch code {
+                            case 58, 61: return 0
+                            case 55, 54: return 1
+                            case 56, 60: return 2
+                            case 59, 62: return 3
+                            case 57: return 4
+                            default: return 0
+                            }
+                        }()
+                        let rightCodes = [61, 54, 60, 62, 57]
+                        let side = code == rightCodes[family] ? "right" : "left"
+                        return "\(family):\(side)"
+                    }
+                    modifierConfig = entries.joined(separator: ",")
+                }
+            }
+        }
     }
 }
 

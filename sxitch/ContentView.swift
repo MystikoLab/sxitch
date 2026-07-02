@@ -247,7 +247,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var eventTap: CFMachPort?
     private var suppressActiveAppCheck = false
     private var permissionCheckTimer: Timer?
-    var lastModifierKeyCode: Int64 = 0
+    var allModifiersHeldPreviously: Bool = false
+    var heldModifierKeyCodes: Set<Int64> = []
     let keyCodeToChar: [Int64: Character] = [
         0: "a", 11: "b", 8: "c", 2: "d", 14: "e", 3: "f", 5: "g",
         4: "h", 34: "i", 38: "j", 40: "k", 37: "l", 46: "m", 45: "n",
@@ -269,10 +270,73 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         57: .maskAlphaShift, // caps lock
     ]
 
-    let altKeyCodes: Set<Int64> = [58, 61]
-    let cmdKeyCodes: Set<Int64> = [55, 54]
-    let shiftKeyCodes: Set<Int64> = [56, 60]
-    let ctrlKeyCodes: Set<Int64> = [59, 62]
+    let familyLeftCodes: [Int] = [58, 55, 56, 59, 57]
+    let familyRightCodes: [Int] = [61, 54, 60, 62, 57]
+
+    private func parseModifierConfig() -> [(family: Int, side: String)] {
+        let str = UserDefaults.standard.string(forKey: "hotkey_modifier_config") ?? ""
+        if str.isEmpty {
+            let oldStr = UserDefaults.standard.string(forKey: "hotkey_modifiers") ?? ""
+            if oldStr.isEmpty {
+                let code = UserDefaults.standard.integer(forKey: "hotkey_modifier")
+                if code > 0 {
+                    let family: Int = {
+                        switch code {
+                        case 58, 61: return 0
+                        case 55, 54: return 1
+                        case 56, 60: return 2
+                        case 59, 62: return 3
+                        case 57: return 4
+                        default: return 0
+                        }
+                    }()
+                    let left = familyLeftCodes[family]
+                    let right = familyRightCodes[family]
+                    let side = code == right ? "right" : "left"
+                    let sided = UserDefaults.standard.bool(forKey: "hotkey_sided")
+                    return [(family, sided ? side : "either")]
+                }
+                return [(1, "right")]
+            }
+            return oldStr.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }.map { code in
+                let family: Int = {
+                    switch code {
+                    case 58, 61: return 0
+                    case 55, 54: return 1
+                    case 56, 60: return 2
+                    case 59, 62: return 3
+                    case 57: return 4
+                    default: return 0
+                    }
+                }()
+                let left = familyLeftCodes[family]
+                let right = familyRightCodes[family]
+                let side = code == right ? "right" : "left"
+                return (family, side)
+            }
+        }
+        return str.split(separator: ",").compactMap { entry in
+            let parts = entry.split(separator: ":")
+            guard parts.count == 2, let family = Int(parts[0]) else { return nil }
+            return (family, String(parts[1]))
+        }
+    }
+
+    private func modifiersSatisfied(config: [(family: Int, side: String)]) -> Bool {
+        config.allSatisfy { family, side in
+            if family == 4 {
+                return NSEvent.modifierFlags.contains(.capsLock)
+            }
+            let left = Int64(familyLeftCodes[family])
+            let right = Int64(familyRightCodes[family])
+            switch side {
+            case "left": return heldModifierKeyCodes.contains(left)
+            case "right": return heldModifierKeyCodes.contains(right)
+            case "either": return heldModifierKeyCodes.contains(left) || heldModifierKeyCodes.contains(right)
+            default: return false
+            }
+        }
+    }
 
     func applicationWillFinishLaunching(_: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -451,12 +515,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     >? {
         let flags = event.flags
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        let savedModifier = UserDefaults.standard.integer(forKey: "hotkey_modifier")
         let savedKeycode = UserDefaults.standard.integer(forKey: "hotkey_keycode")
-        let hotkeySided = UserDefaults.standard.bool(forKey: "hotkey_sided")
 
-        if type == .flagsChanged {
-            lastModifierKeyCode = keyCode
+        if type == .flagsChanged, flagForKeyCode.keys.contains(keyCode) {
+            if flags.contains(flagForKeyCode[keyCode]!) {
+                heldModifierKeyCodes.insert(keyCode)
+            } else {
+                heldModifierKeyCodes.remove(keyCode)
+            }
         }
 
         if keyCode == 53, window.isVisible {
@@ -521,44 +587,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        let matchesModifier: Bool = {
-            if hotkeySided {
-                return keyCode == savedModifier
-            } else {
-                let k = Int64(savedModifier)
-                if altKeyCodes.contains(k) { return altKeyCodes.contains(keyCode) }
-                if cmdKeyCodes.contains(k) { return cmdKeyCodes.contains(keyCode) }
-                if shiftKeyCodes.contains(k) { return shiftKeyCodes.contains(keyCode) }
-                if ctrlKeyCodes.contains(k) { return ctrlKeyCodes.contains(keyCode) }
-                if k == 57 { return keyCode == 57 } // caps lock
-                if k == 63 { return keyCode == 63 } // fn
-                return false
-            }
-        }()
-
-        if savedKeycode == 256, matchesModifier,
-           let flag = flagForKeyCode[keyCode],
-           flags.contains(flag)
-        {
-            DispatchQueue.main.async {
-                if self.window.isVisible {
-                    self.closeWindow()
-                } else {
-                    // 1. Grab a dummy point on the mouse's current screen
-                    let activeScreen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
-                    if let screenFrame = activeScreen?.frame {
-                        // 2. Warp the window origin to the active screen instantly (offscreen/hidden)
-                        self.window.setFrameOrigin(screenFrame.origin)
+        if savedKeycode == 256, type == .flagsChanged {
+            let config = parseModifierConfig()
+            let allHeld = modifiersSatisfied(config: config)
+            if allHeld && !allModifiersHeldPreviously {
+                allModifiersHeldPreviously = true
+                DispatchQueue.main.async {
+                    if self.window.isVisible {
+                        self.closeWindow()
+                    } else {
+                        let activeScreen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+                        if let screenFrame = activeScreen?.frame {
+                            self.window.setFrameOrigin(screenFrame.origin)
+                        }
+                        self.window.center()
+                        NotificationCenter.default.post(name: .switcherWillShow, object: nil)
+                        self.window.orderFrontRegardless()
                     }
-
-                    // 3. Let AppKit handle the centering geometry natively
-                    self.window.center()
-
-                    NotificationCenter.default.post(name: .switcherWillShow, object: nil)
-                    self.window.orderFrontRegardless()
                 }
+                return nil
+            } else if !allHeld {
+                allModifiersHeldPreviously = false
             }
-            return nil
         }
 
         if window.isVisible, flags == CGEventFlags(rawValue: 256) {
@@ -645,23 +695,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             //                }
         }
 
-        if type == .keyDown {
-            let modifierMatch: Bool = {
-                let k = Int64(savedModifier)
-                if hotkeySided {
-                    return lastModifierKeyCode == k
-                } else {
-                    if altKeyCodes.contains(k) { return flags.contains(.maskAlternate) }
-                    if cmdKeyCodes.contains(k) { return flags.contains(.maskCommand) }
-                    if shiftKeyCodes.contains(k) { return flags.contains(.maskShift) }
-                    if ctrlKeyCodes.contains(k) { return flags.contains(.maskControl) }
-                    if k == 57 { return flags.contains(.maskAlphaShift) }
-                    if k == 63 { return lastModifierKeyCode == 63 }
-                    return false
-                }
-            }()
-
-            if savedKeycode != 256, modifierMatch, keyCode == Int64(savedKeycode) {
+        if type == .keyDown, savedKeycode != 256, keyCode == Int64(savedKeycode) {
+            let config = parseModifierConfig()
+            if modifiersSatisfied(config: config) {
                 DispatchQueue.main.async {
                     if self.window.isVisible {
                         self.closeWindow()
