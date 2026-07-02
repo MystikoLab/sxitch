@@ -68,7 +68,7 @@ struct OnboardingView: View {
             HStack {
                 // Page dots
                 HStack(spacing: 8) {
-                    ForEach(0..<4, id: \.self) { index in
+                    ForEach(0 ..< 4, id: \.self) { index in
                         Circle()
                             .fill(
                                 index == currentPage
@@ -130,7 +130,9 @@ struct OnboardingView: View {
 
 struct WelcomePage: View {
     @AppStorage("accentColorHex") var accentColorHex: String = "system"
-    var accentColor: Color { resolvedAccentColor(from: accentColorHex) ?? .accentColor }
+    var accentColor: Color {
+        resolvedAccentColor(from: accentColorHex) ?? .accentColor
+    }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -196,7 +198,7 @@ struct PermissionsPage: View {
                     action: {
                         let options =
                             [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
-                            as CFDictionary
+                                as CFDictionary
                         AXIsProcessTrustedWithOptions(options)
                     }
                 )
@@ -211,7 +213,7 @@ struct PermissionsPage: View {
                         NSWorkspace.shared.open(
                             URL(
                                 string:
-                                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+                                "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
                             )!
                         )
                     }
@@ -246,7 +248,9 @@ struct PermissionRow: View {
     var required: Bool = false
     let action: () -> Void
     @AppStorage("accentColorHex") var accentColorHex: String = "system"
-    var accentColor: Color { resolvedAccentColor(from: accentColorHex) ?? .accentColor }
+    var accentColor: Color {
+        resolvedAccentColor(from: accentColorHex) ?? .accentColor
+    }
 
     var body: some View {
         HStack(spacing: 16) {
@@ -315,21 +319,21 @@ struct TutorialPage: View {
                     number: "1",
                     title: "Summon with your hotkey",
                     description:
-                        "Press Right ⌘ (or your configured hotkey) to show the switcher overlay."
+                    "Press Right ⌘ (or your configured hotkey) to show the switcher overlay."
                 )
 
                 TutorialRow(
                     number: "2",
                     title: "Type to jump to an app",
                     description:
-                        "Type the first letter(s) of an app's name. With only one match, Sxitch opens it instantly."
+                    "Type the first letter(s) of an app's name. With only one match, Sxitch opens it instantly."
                 )
 
                 TutorialRow(
                     number: "3",
                     title: "Power modes (Pro)",
                     description:
-                        "Press ⌃Q for Quit mode, ⌃H to Hide, ⌃N to return to Normal mode while the overlay is open."
+                    "Press ⌃Q for Quit mode, ⌃H to Hide, ⌃N to return to Normal mode while the overlay is open."
                 )
             }
             .frame(maxWidth: 480)
@@ -344,7 +348,9 @@ struct TutorialRow: View {
     let title: String
     let description: String
     @AppStorage("accentColorHex") var accentColorHex: String = "system"
-    var accentColor: Color { resolvedAccentColor(from: accentColorHex) ?? .accentColor }
+    var accentColor: Color {
+        resolvedAccentColor(from: accentColorHex) ?? .accentColor
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {

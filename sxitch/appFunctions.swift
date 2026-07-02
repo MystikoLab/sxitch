@@ -12,9 +12,13 @@ struct RunningApp: Identifiable, Equatable, View {
     static func == (lhs: RunningApp, rhs: RunningApp) -> Bool {
         lhs.id == rhs.id && lhs.depth == rhs.depth && lhs.appMode == rhs.appMode
     }
+
     @AppStorage("appBlacklists") var blacklist: [String] = []
 
-    var id: Int32 { app.processIdentifier }
+    var id: Int32 {
+        app.processIdentifier
+    }
+
     var appName: String
     var app: NSRunningApplication
     var icon: NSImage
@@ -124,7 +128,7 @@ struct RunningApp: Identifiable, Equatable, View {
                 return app
             }
             .filter { app in
-                return app.app.activationPolicy == .regular
+                app.app.activationPolicy == .regular
                     && (!blacklist.contains(app.appName.lowercased()) || !usState.isPro)
             }
             .sorted { $0.appName < $1.appName }
@@ -132,23 +136,23 @@ struct RunningApp: Identifiable, Equatable, View {
 
     func performAction(action: AppMode) {
         switch action {
-        case .normal: self.openApp()
-        case .hide: self.hideApp()
-        case .quit: self.quitApp()
+        case .normal: openApp()
+        case .hide: hideApp()
+        case .quit: quitApp()
         }
     }
 
     func hideApp() {
-        self.app.hide()
+        app.hide()
     }
 
     func quitApp() {
-        print("Terminating: \(self.appName)")
-        self.app.terminate()
+        print("Terminating: \(appName)")
+        app.terminate()
     }
 
     func openApp() {
-        if let bundleUrl = self.bundleUrl {
+        if let bundleUrl = bundleUrl {
             NSWorkspace.shared.open(bundleUrl)
         }
     }

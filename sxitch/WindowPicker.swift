@@ -11,7 +11,7 @@ import SwiftUI
 // MARK: - WindowInfo
 
 struct WindowInfo: Identifiable {
-    let id: Int  // index from AX enumeration
+    let id: Int // index from AX enumeration
     let title: String
     let axElement: AXUIElement
     let ownerApp: NSRunningApplication
@@ -26,7 +26,8 @@ struct WindowInfo: Identifiable {
         case .hide:
             // Minimise just this window
             AXUIElementSetAttributeValue(
-                axElement, kAXMinimizedAttribute as CFString, true as CFTypeRef)
+                axElement, kAXMinimizedAttribute as CFString, true as CFTypeRef
+            )
 
         case .quit:
             // Press the window's close button
@@ -46,7 +47,7 @@ func fetchWindowsForApp(_ nsApp: NSRunningApplication) -> [WindowInfo] {
     var windowsRef: CFTypeRef?
     guard
         AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef)
-            == .success,
+        == .success,
         let axWindows = windowsRef as? [AXUIElement]
     else { return [] }
 
@@ -54,7 +55,7 @@ func fetchWindowsForApp(_ nsApp: NSRunningApplication) -> [WindowInfo] {
         var titleRef: CFTypeRef?
         guard
             AXUIElementCopyAttributeValue(axWindow, kAXTitleAttribute as CFString, &titleRef)
-                == .success,
+            == .success,
             let title = titleRef as? String,
             !title.isEmpty
         else { return nil }
@@ -139,7 +140,6 @@ struct WindowPickerView: View {
         .frame(maxHeight: 400)
     }
 
-    @ViewBuilder
     private func windowGridCell(_ window: WindowInfo) -> some View {
         VStack(spacing: 6) {
             ZStack(alignment: .topTrailing) {
@@ -148,9 +148,9 @@ struct WindowPickerView: View {
                     .frame(width: 48, height: 48)
 
                 if !typed.isEmpty,
-                    let nextChar = window.title.dropFirst(typed.count).first(where: {
-                        !$0.isWhitespace
-                    })
+                   let nextChar = window.title.dropFirst(typed.count).first(where: {
+                       !$0.isWhitespace
+                   })
                 {
                     Text(String(nextChar).uppercased())
                         .foregroundStyle(appMode == .normal ? Color.primary : modeColor)
@@ -192,9 +192,9 @@ struct WindowPickerView: View {
 
                 // Show the next character badge, same as the app picker
                 if !typed.isEmpty,
-                    let nextChar = window.title.dropFirst(typed.count).first(where: {
-                        !$0.isWhitespace
-                    })
+                   let nextChar = window.title.dropFirst(typed.count).first(where: {
+                       !$0.isWhitespace
+                   })
                 {
                     Text(String(nextChar).uppercased())
                         .foregroundStyle(appMode == .normal ? Color.primary : modeColor)

@@ -22,7 +22,7 @@ class AppState: ObservableObject {
     @Published var drillDownApp: NSRunningApplication? = nil
 }
 
-typealias AppHotkeys = [String: String]  // "keycode:modifier" → bundleIdentifier
+typealias AppHotkeys = [String: String] // "keycode:modifier" → bundleIdentifier
 
 extension UserDefaults {
     var appHotkeys: AppHotkeys {
@@ -93,7 +93,8 @@ struct ContentView: View {
             .clipShape(RoundedRectangle(cornerRadius: 30))
             .onReceive(
                 NSWorkspace.shared.notificationCenter.publisher(
-                    for: NSWorkspace.didLaunchApplicationNotification)
+                    for: NSWorkspace.didLaunchApplicationNotification
+                )
             ) { _ in
                 // Skip while the window is hidden: updating @State during a constraint
                 // update pass on a hidden window triggers a setNeedsUpdateConstraints
@@ -105,7 +106,8 @@ struct ContentView: View {
             }
             .onReceive(
                 NSWorkspace.shared.notificationCenter.publisher(
-                    for: NSWorkspace.didTerminateApplicationNotification)
+                    for: NSWorkspace.didTerminateApplicationNotification
+                )
             ) { _ in
                 guard appDelegate.window.isVisible else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
@@ -188,15 +190,16 @@ struct ContentView: View {
                 .asymmetric(
                     insertion: .move(edge: .top).combined(with: .opacity),
                     removal: .move(edge: .top).combined(with: .opacity)
-                ))
+                )
+            )
     }
 
     func handleAppTap(_ app: RunningApp) {
         let windows = fetchWindowsForApp(app.app)
         let windowPickerEnabled = UserDefaults.standard.bool(forKey: "windowPickerEnabled")
-        let currentMode = appState.mode  // capture before closeWindow() resets it
+        let currentMode = appState.mode // capture before closeWindow() resets it
 
-        if windows.count > 1 && userState.shared.isPro && windowPickerEnabled {
+        if windows.count > 1, userState.shared.isPro, windowPickerEnabled {
             appState.drillDownApp = app.app
         } else if windows.count == 1 {
             windows[0].performAction(currentMode)
@@ -214,13 +217,13 @@ struct ContentView: View {
         modifiedApp.overrideTap = { [self] tapped in handleAppTap(tapped) }
         return
             modifiedApp
-            .transition(
-                .asymmetric(
-                    insertion: .scale(scale: 0.85).combined(with: .opacity),
-                    removal: .scale(scale: 0.85).combined(with: .opacity)
-                ))
+                .transition(
+                    .asymmetric(
+                        insertion: .scale(scale: 0.85).combined(with: .opacity),
+                        removal: .scale(scale: 0.85).combined(with: .opacity)
+                    )
+                )
     }
-
 }
 
 import SwiftUI
@@ -229,10 +232,10 @@ extension View {
     @ViewBuilder
     func modernMacBackground() -> some View {
         if #available(macOS 27.0, *) {
-            self.background(.ultraThinMaterial)
+            background(.ultraThinMaterial)
         } else {
             // Your manual fallback for older macOS versions
-            self.background(.regularMaterial)
+            background(.regularMaterial)
         }
     }
 }
@@ -255,15 +258,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var proState = userState.shared
 
     let flagForKeyCode: [Int64: CGEventFlags] = [
-        58: .maskAlternate,  // left ⌥
-        61: .maskAlternate,  // right ⌥
-        55: .maskCommand,  // left ⌘
-        54: .maskCommand,  // right ⌘
-        56: .maskShift,  // left ⇧
-        60: .maskShift,  // right ⇧
-        59: .maskControl,  // left ⌃
-        62: .maskControl,  // right ⌃
-        57: .maskAlphaShift,  // caps lock
+        58: .maskAlternate, // left ⌥
+        61: .maskAlternate, // right ⌥
+        55: .maskCommand, // left ⌘
+        54: .maskCommand, // right ⌘
+        56: .maskShift, // left ⇧
+        60: .maskShift, // right ⇧
+        59: .maskControl, // left ⌃
+        62: .maskControl, // right ⌃
+        57: .maskAlphaShift, // caps lock
     ]
 
     let altKeyCodes: Set<Int64> = [58, 61]
@@ -271,11 +274,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let shiftKeyCodes: Set<Int64> = [56, 60]
     let ctrlKeyCodes: Set<Int64> = [59, 62]
 
-    func applicationWillFinishLaunching(_ notification: Notification) {
+    func applicationWillFinishLaunching(_: Notification) {
         NSApp.setActivationPolicy(.accessory)
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         return false
     }
 
@@ -315,7 +318,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_: Notification) {
         window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 0, height: 0),
             styleMask: [.borderless, .fullSizeContentView, .nonactivatingPanel],
@@ -330,7 +333,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.collectionBehavior = [.canJoinAllSpaces, .stationary]
 
         let contentView = NSHostingView(
-            rootView: ContentView(appState: appState, appDelegate: self))
+            rootView: ContentView(appState: appState, appDelegate: self)
+        )
         contentView.translatesAutoresizingMaskIntoConstraints = false
         window.contentView = contentView
 
@@ -368,8 +372,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
-        NotificationCenter.default.addObserver(forName: .appHotkeyAdded, object: nil, queue: .main)
-        { note in
+        NotificationCenter.default.addObserver(forName: .appHotkeyAdded, object: nil, queue: .main) { note in
             guard let bundleURL = note.object as? String else { return }
             Task { @MainActor in
                 KeyboardShortcuts.onKeyDown(for: .appLaunch(bundleURL)) {
@@ -383,7 +386,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupEventTap()
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
-            [weak self] event in
+            [weak self] _ in
             guard let self = self else { return }
             if self.window.isVisible {
                 self.closeWindow()
@@ -438,12 +441,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         eventTap = tap
         let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)  // ← .getMain() not .getCurrent()
+        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes) // ← .getMain() not .getCurrent()
         CGEvent.tapEnable(tap: tap, enable: true)
         print("Event tap created successfully")
     }
 
-    func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<
+    func handleEvent(proxy _: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<
         CGEvent
     >? {
         let flags = event.flags
@@ -456,7 +459,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             lastModifierKeyCode = keyCode
         }
 
-        if keyCode == 53 && self.window.isVisible {
+        if keyCode == 53, window.isVisible {
             DispatchQueue.main.async {
                 if self.appState.drillDownApp != nil {
                     if self.appState.typed.isEmpty {
@@ -473,13 +476,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return nil
         }
         // open settings panel
-        if self.window.isVisible && flags.contains(.maskCommand) && keyCode == 43 {
-            self.closeWindow()
+        if window.isVisible, flags.contains(.maskCommand), keyCode == 43 {
+            closeWindow()
             openSettings()
             return nil
         }
 
-        if self.window.isVisible && flags.contains(.maskControl) && proState.isPro {
+        if window.isVisible, flags.contains(.maskControl), proState.isPro {
             if keyCode == 12 {
                 // `q` key
                 DispatchQueue.main.async {
@@ -527,15 +530,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if cmdKeyCodes.contains(k) { return cmdKeyCodes.contains(keyCode) }
                 if shiftKeyCodes.contains(k) { return shiftKeyCodes.contains(keyCode) }
                 if ctrlKeyCodes.contains(k) { return ctrlKeyCodes.contains(keyCode) }
-                if k == 57 { return keyCode == 57 }  // caps lock
-                if k == 63 { return keyCode == 63 }  // fn
+                if k == 57 { return keyCode == 57 } // caps lock
+                if k == 63 { return keyCode == 63 } // fn
                 return false
             }
         }()
 
         if savedKeycode == 256, matchesModifier,
-            let flag = flagForKeyCode[keyCode],
-            flags.contains(flag)
+           let flag = flagForKeyCode[keyCode],
+           flags.contains(flag)
         {
             DispatchQueue.main.async {
                 if self.window.isVisible {
@@ -547,10 +550,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         // 2. Warp the window origin to the active screen instantly (offscreen/hidden)
                         self.window.setFrameOrigin(screenFrame.origin)
                     }
-                    
+
                     // 3. Let AppKit handle the centering geometry natively
                     self.window.center()
-                    
+
                     NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                     self.window.orderFrontRegardless()
                 }
@@ -558,12 +561,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return nil
         }
 
-        if window.isVisible && flags == CGEventFlags(rawValue: 256) {
+        if window.isVisible, flags == CGEventFlags(rawValue: 256) {
             if let letter = keyCodeToChar[keyCode] {
-                let candidate = self.appState.typed + "\(letter)"
+                let candidate = appState.typed + "\(letter)"
 
                 // ── Window picking mode ────────────────────────────────────
-                if let drillApp = self.appState.drillDownApp {
+                if let drillApp = appState.drillDownApp {
                     let allWindows = fetchWindowsForApp(drillApp)
                     let matchedWindows = allWindows.filter {
                         $0.title.lowercased().starts(with: candidate.lowercased())
@@ -593,8 +596,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     let singleApp = filteredApps[0]
                     let windows = fetchWindowsForApp(singleApp.app)
                     let windowPickerEnabled = UserDefaults.standard.bool(
-                        forKey: "windowPickerEnabled")
-                    if windows.count > 1 && self.proState.isPro && windowPickerEnabled {
+                        forKey: "windowPickerEnabled"
+                    )
+                    if windows.count > 1 && proState.isPro && windowPickerEnabled {
                         DispatchQueue.main.async {
                             self.appState.typed = ""
                             self.appState.depth = 0
@@ -604,8 +608,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         DispatchQueue.main.async {
                             windows[0].performAction(self.appState.mode)
                         }
-                        if self.appState.mode == .normal {
-                            self.closeWindow()
+                        if appState.mode == .normal {
+                            closeWindow()
                         }
                         appState.depth = 0
                         appState.typed = ""
@@ -613,7 +617,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         DispatchQueue.main.async {
                             singleApp.performAction(action: self.appState.mode)
                         }
-                        if self.appState.mode == .normal {
+                        if appState.mode == .normal {
                             closeWindow()
                         }
                         appState.depth = 0
@@ -657,7 +661,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }()
 
-            if savedKeycode != 256 && modifierMatch && keyCode == Int64(savedKeycode) {
+            if savedKeycode != 256, modifierMatch, keyCode == Int64(savedKeycode) {
                 DispatchQueue.main.async {
                     if self.window.isVisible {
                         self.closeWindow()

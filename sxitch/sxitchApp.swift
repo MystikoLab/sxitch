@@ -99,7 +99,8 @@ func makeMenuBarIcon() -> NSImage {
             let ty = cy + len * sin(rad)
             let d = NSBezierPath()
             d.appendArc(
-                withCenter: NSPoint(x: tx, y: ty), radius: dotR, startAngle: 0, endAngle: 360)
+                withCenter: NSPoint(x: tx, y: ty), radius: dotR, startAngle: 0, endAngle: 360
+            )
             d.fill()
         }
 

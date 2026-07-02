@@ -3,7 +3,7 @@ import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
 
-// When the user adds a hotkey, register a name dynamically
+/// When the user adds a hotkey, register a name dynamically
 extension KeyboardShortcuts.Name {
     static func appLaunch(_ bundleURL: String) -> Self {
         .init("appLaunch_\(bundleURL)")
@@ -21,7 +21,9 @@ struct SettingsView: View {
     @AppStorage("accentColorHex") var accentColorHex: String = "system"
     @State private var selectedTab: SettingsTab = .general
 
-    var accentColor: Color { resolvedAccentColor(from: accentColorHex) ?? .accentColor }
+    var accentColor: Color {
+        resolvedAccentColor(from: accentColorHex) ?? .accentColor
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -60,7 +62,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     case advanced
     case activate
 
-    var id: String { self.rawValue }
+    var id: String {
+        rawValue
+    }
 
     var title: String {
         switch self {
@@ -71,7 +75,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    var icon: String { icon(isPro: false) }
+    var icon: String {
+        icon(isPro: false)
+    }
 
     func icon(isPro: Bool) -> String {
         switch self {
@@ -90,9 +96,7 @@ struct GeneralSettingsView: View {
     @Environment(\.openWindow) private var openWindow
     private var usState = userState.shared
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
-    @State private var isLaunchAtLoginEnabled: Bool = {
-        SMAppService.mainApp.status == .enabled
-    }()
+    @State private var isLaunchAtLoginEnabled: Bool = SMAppService.mainApp.status == .enabled
 
     @AppStorage("hotkey_modifier") private var savedModifier: Int = 58
     @AppStorage("hotkey_keycode") private var keycode: Int = 49
@@ -148,7 +152,7 @@ struct GeneralSettingsView: View {
                         Button("Request") {
                             let options =
                                 [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
-                                as CFDictionary
+                                    as CFDictionary
                             AXIsProcessTrustedWithOptions(options)
                         }
                     }
@@ -169,10 +173,10 @@ struct GeneralSettingsView: View {
                         set: { newFamily in
                             savedModifier =
                                 hotkeySided
-                                ? (savedModifier == rightKeycode(for: selectedFamily)
-                                    ? rightKeycode(for: newFamily)
-                                    : leftKeycode(for: newFamily))
-                                : leftKeycode(for: newFamily)
+                                    ? (savedModifier == rightKeycode(for: selectedFamily)
+                                        ? rightKeycode(for: newFamily)
+                                        : leftKeycode(for: newFamily))
+                                    : leftKeycode(for: newFamily)
                         }
                     )
                 ) {
@@ -198,8 +202,8 @@ struct GeneralSettingsView: View {
                             set: { side in
                                 savedModifier =
                                     side == 0
-                                    ? leftKeycode(for: selectedFamily)
-                                    : rightKeycode(for: selectedFamily)
+                                        ? leftKeycode(for: selectedFamily)
+                                        : rightKeycode(for: selectedFamily)
                             }
                         )
                     ) {
@@ -215,6 +219,7 @@ struct GeneralSettingsView: View {
                     Text("Tab").tag(48)
                     Text("Return").tag(36)
                 }
+                .pickerStyle(.segmented)
             }
             Section {
                 HStack {
@@ -244,7 +249,8 @@ struct GeneralSettingsView: View {
                             }
                         } catch {
                             print(
-                                "Failed to update login item state: \(error.localizedDescription)")
+                                "Failed to update login item state: \(error.localizedDescription)"
+                            )
                             isLaunchAtLoginEnabled = oldValue
                         }
                     }
@@ -300,30 +306,30 @@ extension Color {
         if let ns = NSColor(self).usingColorSpace(.sRGB) {
             return String(
                 format: "%02X%02X%02X",
-                Int((ns.redComponent.clamped(to: 0...1) * 255).rounded()),
-                Int((ns.greenComponent.clamped(to: 0...1) * 255).rounded()),
-                Int((ns.blueComponent.clamped(to: 0...1) * 255).rounded())
+                Int((ns.redComponent.clamped(to: 0 ... 1) * 255).rounded()),
+                Int((ns.greenComponent.clamped(to: 0 ... 1) * 255).rounded()),
+                Int((ns.blueComponent.clamped(to: 0 ... 1) * 255).rounded())
             )
         }
         if let ns = NSColor(self).usingColorSpace(.deviceRGB) {
             return String(
                 format: "%02X%02X%02X",
-                Int((ns.redComponent.clamped(to: 0...1) * 255).rounded()),
-                Int((ns.greenComponent.clamped(to: 0...1) * 255).rounded()),
-                Int((ns.blueComponent.clamped(to: 0...1) * 255).rounded())
+                Int((ns.redComponent.clamped(to: 0 ... 1) * 255).rounded()),
+                Int((ns.greenComponent.clamped(to: 0 ... 1) * 255).rounded()),
+                Int((ns.blueComponent.clamped(to: 0 ... 1) * 255).rounded())
             )
         }
         // Last resort: pull from CGColor
         let cg = NSColor(self).cgColor
         let cs = CGColorSpace(name: CGColorSpace.sRGB)!
         if let converted = cg.converted(to: cs, intent: .defaultIntent, options: nil),
-            let c = converted.components, c.count >= 3
+           let c = converted.components, c.count >= 3
         {
             return String(
                 format: "%02X%02X%02X",
-                Int((c[0].clamped(to: 0...1) * 255).rounded()),
-                Int((c[1].clamped(to: 0...1) * 255).rounded()),
-                Int((c[2].clamped(to: 0...1) * 255).rounded())
+                Int((c[0].clamped(to: 0 ... 1) * 255).rounded()),
+                Int((c[1].clamped(to: 0 ... 1) * 255).rounded()),
+                Int((c[2].clamped(to: 0 ... 1) * 255).rounded())
             )
         }
         return "0000FF"
@@ -404,16 +410,13 @@ struct ThemeSettingsView: View {
                             accentColorHex = preset.color.hexString
                         }
                     }
-
                 }
                 .padding(.vertical, 4)
             }
         }
         .padding()
         .formStyle(.grouped)
-
     }
-
 }
 
 struct AccentSwatch<Swatch: View>: View {
@@ -431,7 +434,8 @@ struct AccentSwatch<Swatch: View>: View {
                     Circle()
                         .strokeBorder(
                             Color.primary.opacity(isSelected ? 0.9 : 0.15),
-                            lineWidth: isSelected ? 2.5 : 1)
+                            lineWidth: isSelected ? 2.5 : 1
+                        )
                 )
                 .overlay(
                     Image(systemName: "checkmark")
@@ -563,7 +567,6 @@ struct AppHotkeySettingsView: View {
             header: Text("App Launch Hotkeys"),
             footer: Text("Shortcuts will launch the app even if it's not running.")
         ) {
-
             ForEach(Array(hotkeys.keys.sorted()), id: \.self) { bundleURL in
                 HStack {
                     Text(appName(for: bundleURL))
@@ -604,7 +607,8 @@ struct AppHotkeySettingsView: View {
                 .publisher(for: NSWorkspace.didLaunchApplicationNotification)
                 .merge(
                     with: NSWorkspace.shared.notificationCenter
-                        .publisher(for: NSWorkspace.didTerminateApplicationNotification))
+                        .publisher(for: NSWorkspace.didTerminateApplicationNotification)
+                )
         ) { _ in
             runningApps = NSWorkspace.shared.runningApplications
                 .filter { $0.activationPolicy == .regular }
@@ -614,7 +618,8 @@ struct AppHotkeySettingsView: View {
                 .publisher(for: NSWorkspace.didDeactivateApplicationNotification)
                 .merge(
                     with: NSWorkspace.shared.notificationCenter
-                        .publisher(for: NSWorkspace.didTerminateApplicationNotification))
+                        .publisher(for: NSWorkspace.didTerminateApplicationNotification)
+                )
         ) { _ in
             runningApps = NSWorkspace.shared.runningApplications
                 .filter { $0.activationPolicy == .regular }
@@ -698,7 +703,8 @@ struct ActivateSettingsView: View {
                 Section(
                     header: Text("Activate Pro"),
                     footer: Text(
-                        "Enter the license key received upon purchase to unlock Pro features.")
+                        "Enter the license key received upon purchase to unlock Pro features."
+                    )
                 ) {
                     TextField("XXXX-XXXX-XXXX-XXXX", text: $licenseKey)
                         .disabled(isActivating || appState.isCheckingLicense)
@@ -723,12 +729,13 @@ struct ActivateSettingsView: View {
                     }
                     .disabled(
                         licenseKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            || isActivating)
+                            || isActivating
+                    )
                 }
             }
         }
         .padding()
-        .formStyle(.grouped)  // Enforces matching macOS Settings style architecture
+        .formStyle(.grouped) // Enforces matching macOS Settings style architecture
         .task {
             await appState.checkCurrentActivationStatus()
         }

@@ -5,7 +5,6 @@
 //  Created by Umang on 26/6/26.
 //
 
-
 import Foundation
 import Security
 
@@ -13,12 +12,11 @@ let APP_NAME = "Sxitch"
 private let POLAR_API_BASE = "https://api.polar.sh/v1/customer-portal/license-keys"
 private let ORGANIZATION_ID = "a2f08c52-6a41-4dc1-9b56-a5ea683b37b3"
 
-
 struct PolarKeyActivationReq: Encodable {
     let key: String
     let organizationId: String
     let label: UUID
-    
+
     enum CodingKeys: String, CodingKey {
         case key
         case organizationId = "organization_id"
@@ -36,7 +34,7 @@ struct PolarKeyActivationRes: Decodable {
     let licenseKeyId: String
     let label: String
     let licenseKey: LicenseKey
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case licenseKeyId = "license_key_id"
@@ -49,7 +47,7 @@ struct PolarKeyValidateReq: Encodable {
     let key: String
     let organizationId: String
     let activationId: String
-    
+
     enum CodingKeys: String, CodingKey {
         case key
         case organizationId = "organization_id"
@@ -60,7 +58,7 @@ struct PolarKeyValidateReq: Encodable {
 struct Activation: Decodable {
     let id: String
     let licenseKeyId: String
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case licenseKeyId = "license_key_id"
@@ -79,7 +77,7 @@ struct PolarKeyValidateRes: Decodable {
     let lastValidatedAt: String?
     let expiresAt: String?
     let activation: Activation?
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case organizationId = "organization_id"
@@ -101,34 +99,34 @@ func activateKey(key: String) async throws -> Bool {
         organizationId: ORGANIZATION_ID,
         label: UUID()
     )
-    
+
     guard let url = URL(string: "\(POLAR_API_BASE)/activate") else {
         return false
     }
-    
+
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = try JSONEncoder().encode(reqBody)
-    
+
     let (data, response) = try await URLSession.shared.data(for: request)
-    
-    guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+
+    guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
         return false
     }
-    
+
     let body = try JSONDecoder().decode(PolarKeyActivationRes.self, from: data)
-    
+
     let actId = body.id
     let licenseKeyId = body.licenseKey.key
-    
+
     do {
         try storeCredentials(activationId: actId, keyId: licenseKeyId)
         print("Credentials stored successfully") // Replace with your preferred Swift logger
     } catch {
         print("Failed to store credentials: \(error)")
     }
-    
+
     return body.licenseKey.status == "granted"
 }
 
@@ -138,22 +136,22 @@ func validateKey(key: String, activationId: String) async throws -> Bool {
         organizationId: ORGANIZATION_ID,
         activationId: activationId
     )
-    
+
     guard let url = URL(string: "\(POLAR_API_BASE)/validate") else {
         return false
     }
-    
+
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = try JSONEncoder().encode(reqBody)
-    
+
     let (data, response) = try await URLSession.shared.data(for: request)
-    
-    guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+
+    guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
         return false
     }
-    
+
     let body = try JSONDecoder().decode(PolarKeyValidateRes.self, from: data)
     return body.status == "granted"
 }
@@ -187,17 +185,17 @@ private func saveKeychainSecret(account: String, secret: String) throws {
     guard let data = secret.data(withAllowedCharacters: .utf8) else {
         throw KeychainError.conversionError
     }
-    
+
     let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
         kSecAttrService as String: APP_NAME,
         kSecAttrAccount as String: account,
-        kSecValueData as String: data
+        kSecValueData as String: data,
     ]
-    
+
     // First try to delete existing item to handle updates cleanly
     SecItemDelete(query as CFDictionary)
-    
+
     let status = SecItemAdd(query as CFDictionary, nil)
     guard status == errSecSuccess else {
         throw KeychainError.unhandledStatus(status)
@@ -210,20 +208,20 @@ private func readKeychainSecret(account: String) throws -> String {
         kSecAttrService as String: APP_NAME,
         kSecAttrAccount as String: account,
         kSecReturnData as String: true,
-        kSecMatchLimit as String: kSecMatchLimitOne
+        kSecMatchLimit as String: kSecMatchLimitOne,
     ]
-    
+
     var dataTypeRef: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &dataTypeRef)
-    
+
     guard status == errSecSuccess, let data = dataTypeRef as? Data else {
         throw KeychainError.unhandledStatus(status)
     }
-    
+
     guard let secret = String(data: data, encoding: .utf8) else {
         throw KeychainError.conversionError
     }
-    
+
     return secret
 }
 
@@ -231,18 +229,18 @@ private func deleteKeychainSecret(account: String) throws {
     let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
         kSecAttrService as String: APP_NAME,
-        kSecAttrAccount as String: account
+        kSecAttrAccount as String: account,
     ]
-    
+
     let status = SecItemDelete(query as CFDictionary)
     guard status == errSecSuccess || status == errSecItemNotFound else {
         throw KeychainError.unhandledStatus(status)
     }
 }
 
-// Swift Data extension helper
+/// Swift Data extension helper
 private extension String {
     func data(withAllowedCharacters encoding: String.Encoding) -> Data? {
-        return self.data(using: encoding)
+        return data(using: encoding)
     }
 }
