@@ -51,6 +51,12 @@ struct SettingsView: View {
                 }
                 .tag(SettingsTab.activate)
         }
+        .onAppear {
+            if let window = NSApp.mainWindow {
+                window.level = .floating
+            }
+
+        }
         .frame(width: 800, height: 600)
         .tint(accentColor)
     }
