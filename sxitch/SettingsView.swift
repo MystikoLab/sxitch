@@ -548,7 +548,7 @@ struct AppHotkeySettingsView: View {
     @State private var pendingKeyCode: String? = nil
     @State private var chosenBundleURL: String = ""
 
-    let runningApps = NSWorkspace.shared.runningApplications
+    @State private var runningApps = NSWorkspace.shared.runningApplications
         .filter { $0.activationPolicy == .regular }
 
     let keyCodeToChar: [Int64: String] = [
@@ -598,6 +598,26 @@ struct AppHotkeySettingsView: View {
                 }
                 .disabled(chosenBundleURL.isEmpty)
             }
+        }
+        .onReceive(
+            NSWorkspace.shared.notificationCenter
+                .publisher(for: NSWorkspace.didLaunchApplicationNotification)
+                .merge(
+                    with: NSWorkspace.shared.notificationCenter
+                        .publisher(for: NSWorkspace.didTerminateApplicationNotification))
+        ) { _ in
+            runningApps = NSWorkspace.shared.runningApplications
+                .filter { $0.activationPolicy == .regular }
+        }
+        .onReceive(
+            NSWorkspace.shared.notificationCenter
+                .publisher(for: NSWorkspace.didDeactivateApplicationNotification)
+                .merge(
+                    with: NSWorkspace.shared.notificationCenter
+                        .publisher(for: NSWorkspace.didTerminateApplicationNotification))
+        ) { _ in
+            runningApps = NSWorkspace.shared.runningApplications
+                .filter { $0.activationPolicy == .regular }
         }
     }
 
