@@ -55,7 +55,6 @@ struct SettingsView: View {
             if let window = NSApp.mainWindow {
                 window.level = .floating
             }
-
         }
         .frame(width: 800, height: 600)
         .tint(accentColor)
@@ -174,24 +173,24 @@ struct GeneralSettingsView: View {
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(stateVal == 0 ? Color(nsColor: .controlBackgroundColor) :
-                          stateVal == 1 ? accent :
-                          accent.opacity(0.12))
+                        stateVal == 1 ? accent :
+                        accent.opacity(0.12))
             )
             .foregroundColor(stateVal == 0 ? .primary :
-                             stateVal == 1 ? .white :
-                             accent)
+                stateVal == 1 ? .white :
+                accent)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(stateVal == 0 ? Color(nsColor: .separatorColor).opacity(0.6) :
-                            stateVal == 1 ? accent :
-                            accent.opacity(0.6),
-                            lineWidth: stateVal == 0 ? 0.5 : 2)
+                        stateVal == 1 ? accent :
+                        accent.opacity(0.6),
+                        lineWidth: stateVal == 0 ? 0.5 : 2)
             )
         }
         .buttonStyle(.plain)
         .help(stateVal == 0 ? "\(name) — off" :
-              stateVal == 1 ? "\(name) — \(side) only" :
-              "\(name) — either")
+            stateVal == 1 ? "\(name) — \(side) only" :
+            "\(name) — either")
     }
 
     var body: some View {

@@ -71,17 +71,19 @@ struct ContentView: View {
             .frame(width: 300)
             .frame(maxHeight: 400)
         } else {
-            HStack {
-                ForEach(
-                    openApps.filter {
-                        $0.appName.lowercased().starts(with: appState.typed.lowercased())
-                    }, id: \.id
-                ) { app in
-                    appView(app)
+            ScrollView(.horizontal) {
+                HStack {
+                    ForEach(
+                        openApps.filter {
+                            $0.appName.lowercased().starts(with: appState.typed.lowercased())
+                        }, id: \.id
+                    ) { app in
+                        appView(app)
+                    }
                 }
+                .id(appState.mode)
+                .frame(alignment: .center)
             }
-            .id(appState.mode)
-            .frame(alignment: .center)
         }
     }
 
@@ -366,6 +368,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func resizeWindowToFit() {
         guard window.isVisible else { return }
         guard let hostingView = window.contentView else { return }
+        hostingView.layoutSubtreeIfNeeded();
         let newSize = hostingView.fittingSize
         guard newSize.width > 0, newSize.height > 0 else { return }
         let currentFrame = window.frame
@@ -413,6 +416,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Only show the switcher immediately if onboarding is already done
         if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
             window.makeKeyAndOrderFront(nil)
+            self.appState.depth = 0
+            self.appState.typed = ""
         }
 
         // Show the switcher once the onboarding window signals it's done
@@ -526,7 +531,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if keyCode == 53, window.isVisible {
-            DispatchQueue.main.async {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 if self.appState.drillDownApp != nil {
                     if self.appState.typed.isEmpty {
                         self.appState.drillDownApp = nil
@@ -546,12 +551,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             closeWindow()
             openSettings()
             return nil
+        } else if window.isVisible, flags.contains(.maskCommand), keyCode == 12 {
+            NSApp.terminate(nil)
+            return nil
         }
 
         if window.isVisible, flags.contains(.maskControl), proState.isPro {
             if keyCode == 12 {
                 // `q` key
-                DispatchQueue.main.async {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
                         self.appState.mode = self.appState.mode == .quit ? .normal : .quit
                     }
@@ -559,7 +567,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return nil
             } else if keyCode == 4 {
                 // `h` key
-                DispatchQueue.main.async {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
                         self.appState.mode = self.appState.mode == .hide ? .normal : .hide
                     }
@@ -567,7 +575,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return nil
             } else if keyCode == 45 {
                 // `n` key
-                DispatchQueue.main.async {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
                         self.appState.mode = .normal
                     }
@@ -592,7 +600,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let allHeld = modifiersSatisfied(config: config)
             if allHeld && !allModifiersHeldPreviously {
                 allModifiersHeldPreviously = true
-                DispatchQueue.main.async {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     if self.window.isVisible {
                         self.closeWindow()
                     } else {
@@ -622,14 +630,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         $0.title.lowercased().starts(with: candidate.lowercased())
                     }
                     if matchedWindows.count == 1 {
-                        DispatchQueue.main.async {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                             matchedWindows[0].performAction(self.appState.mode)
                             self.closeWindow()
                         }
                         appState.depth = 0
                         appState.typed = ""
                     } else if !matchedWindows.isEmpty {
-                        DispatchQueue.main.async {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                             self.appState.typed = candidate
                             self.appState.depth += 1
                         }
@@ -639,6 +647,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
 
                 // ── App picking mode ───────────────────────────────────────
+                DispatchQueue.main.async {
                 let filteredApps = RunningApp.fetchRunningApps().filter { app in
                     app.appName.lowercased().starts(with: candidate.lowercased())
                 }
@@ -648,36 +657,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     let windowPickerEnabled = UserDefaults.standard.bool(
                         forKey: "windowPickerEnabled"
                     )
-                    if windows.count > 1 && proState.isPro && windowPickerEnabled {
-                        DispatchQueue.main.async {
+                    if windows.count > 1 && self.proState.isPro && windowPickerEnabled {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                             self.appState.typed = ""
                             self.appState.depth = 0
                             self.appState.drillDownApp = singleApp.app
                         }
                     } else if windows.count == 1 {
-                        DispatchQueue.main.async {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                             windows[0].performAction(self.appState.mode)
                         }
-                        if appState.mode == .normal {
-                            closeWindow()
+                        if self.appState.mode == .normal {
+                            self.closeWindow()
                         }
-                        appState.depth = 0
-                        appState.typed = ""
+                        self.appState.depth = 0
+                        self.appState.typed = ""
                     } else {
-                        DispatchQueue.main.async {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                             singleApp.performAction(action: self.appState.mode)
                         }
-                        if appState.mode == .normal {
-                            closeWindow()
+                        if self.appState.mode == .normal {
+                            self.closeWindow()
                         }
-                        appState.depth = 0
-                        appState.typed = ""
+                        self.appState.depth = 0
+                        self.appState.typed = ""
                     }
                 } else {
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                         self.appState.typed = candidate
                         self.appState.depth += 1
                     }
+                }
                 }
                 return nil
             }
@@ -698,7 +708,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if type == .keyDown, savedKeycode != 256, keyCode == Int64(savedKeycode) {
             let config = parseModifierConfig()
             if modifiersSatisfied(config: config) {
-                DispatchQueue.main.async {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     if self.window.isVisible {
                         self.closeWindow()
                     } else {
@@ -711,11 +721,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        if self.window.isVisible {
+            return nil
+        }
         return Unmanaged.passUnretained(event)
     }
 
     @objc func activeAppChanged() {
-        DispatchQueue.main.async {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             guard !self.suppressActiveAppCheck else { return }
             if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
                 != Bundle.main.bundleIdentifier
