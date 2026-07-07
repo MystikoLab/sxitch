@@ -2,6 +2,7 @@ import Combine
 import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// When the user adds a hotkey, register a name dynamically
 extension KeyboardShortcuts.Name {
@@ -105,6 +106,10 @@ struct GeneralSettingsView: View {
 
     @AppStorage("hotkey_modifier_config") private var modifierConfig: String = "1:right"
     @AppStorage("hotkey_keycode") private var keycode: Int = 49
+
+    @State private var overrides: [String: String] = UserDefaults.standard.keyOverrides
+    @State private var newOverrideOriginal: String = ""
+    @State private var newOverrideTo: String = ""
 
     private func stateFor(family: Int, side: String) -> Int {
         for entry in modifierConfig.split(separator: ",") {
@@ -277,6 +282,72 @@ struct GeneralSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            Section("Key Overrides") {
+                if !usState.isPro {
+                    HStack {
+                        Label("Pro", systemImage: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
+                Text("Override the key that selects an app. Pressing the original key will select apps starting with the override letter instead.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    TextField("Original", text: $newOverrideOriginal)
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(!usState.isPro)
+                    TextField("Override", text: $newOverrideTo)
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(!usState.isPro)
+                    Button("Add", systemImage: "plus") { addOverride() }
+                        .disabled(!usState.isPro || newOverrideOriginal.trimmingCharacters(in: .whitespaces).count != 1 || newOverrideTo.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+
+                if overrides.isEmpty {
+                    Text("No overrides configured yet.")
+                        .foregroundStyle(.secondary)
+                        .font(.callout)
+                        .italic()
+                        .frame(maxWidth: .infinity, minHeight: 60, alignment: .center)
+                } else {
+                    ForEach(Array(overrides.keys.sorted()), id: \.self) { original in
+                        HStack {
+                            Text(original.uppercased())
+                                .font(.system(size: 13, weight: .semibold))
+                                .frame(width: 24, height: 24)
+                                .background(Color(nsColor: .controlBackgroundColor))
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
+                                )
+
+                            Image(systemName: "arrow.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text(overrides[original]!.uppercased())
+                                .font(.system(size: 13, weight: .semibold))
+
+                            Spacer()
+
+                            Button(role: .destructive) {
+                                overrides.removeValue(forKey: original)
+                                saveOverrides()
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(!usState.isPro)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
+
             Section {
                 Toggle("Launch at login", isOn: $isLaunchAtLoginEnabled)
                     .onChange(of: isLaunchAtLoginEnabled) { oldValue, newValue in
@@ -356,6 +427,20 @@ struct GeneralSettingsView: View {
             }
         }
     }
+
+    private func addOverride() {
+        let original = newOverrideOriginal.trimmingCharacters(in: .whitespaces).lowercased()
+        let override = newOverrideTo.trimmingCharacters(in: .whitespaces).lowercased()
+        guard original.count == 1, !override.isEmpty, original != override else { return }
+        overrides[original] = override
+        saveOverrides()
+        newOverrideOriginal = ""
+        newOverrideTo = ""
+    }
+
+    private func saveOverrides() {
+        UserDefaults.standard.keyOverrides = overrides
+    }
 }
 
 // MARK: - Helpers
@@ -427,6 +512,7 @@ struct ThemeSettingsView: View {
     @AppStorage("showMenuIcon") var showMenuIcon: Bool = true
     @AppStorage("accentColorHex") var accentColorHex: String = "system"
     @AppStorage("layoutStyle") var layoutStyle: String = "grid"
+
 
     private let presets: [(name: String, color: Color)] = [
         ("Blue", .blue),
@@ -594,6 +680,7 @@ struct AdvancedSettingsView: View {
     @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"]
 
     private var appState = userState.shared
+    @State private var openApps = RunningApp.fetchRunningApps()
 
     var body: some View {
         Form {
@@ -634,6 +721,8 @@ struct AppHotkeySettingsView: View {
 
     @State private var runningApps = NSWorkspace.shared.runningApplications
         .filter { $0.activationPolicy == .regular }
+
+    @State private var openApps = RunningApp.fetchRunningApps()
 
     let keyCodeToChar: [Int64: String] = [
         0: "A", 11: "B", 8: "C", 2: "D", 14: "E", 3: "F", 5: "G",
@@ -704,6 +793,8 @@ struct AppHotkeySettingsView: View {
             runningApps = NSWorkspace.shared.runningApplications
                 .filter { $0.activationPolicy == .regular }
         }
+
+
     }
 
     private func startRecording() {

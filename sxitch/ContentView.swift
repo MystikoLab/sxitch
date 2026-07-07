@@ -29,6 +29,16 @@ extension UserDefaults {
         get { (dictionary(forKey: "app_hotkeys") as? AppHotkeys) ?? [:] }
         set { set(newValue, forKey: "app_hotkeys") }
     }
+
+    var keyOverrides: [String: String] {
+        get { (dictionary(forKey: "key_overrides") as? [String: String]) ?? [:] }
+        set { set(newValue, forKey: "key_overrides") }
+    }
+
+    var iconMapping: [String: String] {
+        get { (dictionary(forKey: "icon_mapping") as? [String: String]) ?? [:] }
+        set { set(newValue, forKey: "icon_mapping") }
+    }
 }
 
 struct ContentView: View {
@@ -60,18 +70,14 @@ struct ContentView: View {
                 appDelegate.closeWindow()
             }
         } else if layoutStyle == "list" {
-            ScrollView {
                 VStack(spacing: 0) {
                     ForEach(openApps, id: \.id) { app in
                         listRow(app)
                     }
                 }
+                .padding(6)
                 .id(appState.mode)
-            }
-            .frame(width: 300)
-            .frame(maxHeight: 400)
         } else {
-            ScrollView(.horizontal) {
                 HStack {
                     ForEach(
                         openApps.filter {
@@ -83,7 +89,6 @@ struct ContentView: View {
                 }
                 .id(appState.mode)
                 .frame(alignment: .center)
-            }
         }
     }
 
@@ -120,6 +125,9 @@ struct ContentView: View {
                 NotificationCenter.default.publisher(for: .switcherWillShow)
             ) { _ in
                 openApps = RunningApp.fetchRunningApps()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    appDelegate.resizeWindowToFit()
+                }
             }
             .onKeyPress(.escape) {
                 if appState.drillDownApp != nil {
@@ -178,7 +186,6 @@ struct ContentView: View {
     func listRow(_ app: RunningApp) -> some View {
         if app.appName.lowercased().starts(with: appState.typed.lowercased()) {
             appListView(app)
-            Divider().opacity(0.4)
         }
     }
 
@@ -394,6 +401,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         (window as! NSPanel).isFloatingPanel = true
         window.isOpaque = false
+        self.resizeWindowToFit()
         window.backgroundColor = .clear
         window.level = NSWindow.Level(NSWindow.Level.floating.rawValue + 200)
         window.isMovableByWindowBackground = true
@@ -621,7 +629,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if window.isVisible, flags == CGEventFlags(rawValue: 256) {
             if let letter = keyCodeToChar[keyCode] {
-                let candidate = appState.typed + "\(letter)"
+                let raw = String(letter)
+                let pickerChar: String
+                if self.proState.isPro {
+                    let overrides = UserDefaults.standard.keyOverrides
+                    pickerChar = overrides[raw] ?? raw
+                } else {
+                    pickerChar = raw
+                }
+                let candidate = appState.typed + pickerChar
 
                 // ── Window picking mode ────────────────────────────────────
                 if let drillApp = appState.drillDownApp {
@@ -639,7 +655,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     } else if !matchedWindows.isEmpty {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                             self.appState.typed = candidate
-                            self.appState.depth += 1
+                            self.appState.depth += pickerChar.count
                         }
                     }
                     // if nothing matches, swallow the keystroke silently
@@ -685,7 +701,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 } else {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                         self.appState.typed = candidate
-                        self.appState.depth += 1
+                        self.appState.depth += pickerChar.count
                     }
                 }
                 }
@@ -721,9 +737,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        if self.window.isVisible {
-            return nil
-        }
         return Unmanaged.passUnretained(event)
     }
 

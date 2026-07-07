@@ -23,6 +23,7 @@ struct RunningApp: Identifiable, Equatable, View {
     var app: NSRunningApplication
     var icon: NSImage
     var bundleUrl: URL?
+    var bundleID: String
     var depth: Int = 0
     var appMode: AppMode = .normal
     var overrideTap: ((RunningApp) -> Void)? = nil
@@ -105,15 +106,20 @@ struct RunningApp: Identifiable, Equatable, View {
 
     static func fetchRunningApps() -> [RunningApp] {
         let usState = userState.shared
+        var iconMapping: [String: String] = UserDefaults.standard.iconMapping
+
+        
         @AppStorage("appBlacklists") var blacklist: [String] = []
         @AppStorage("prefixStrips") var prefixStrips: [String] = ["microsoft", "adobe"]
         return NSWorkspace.shared.runningApplications
             .map { app in
-                RunningApp(
+                let customIcon = CustomIconStore.shared.load(for: app.bundleIdentifier ?? "")
+                return RunningApp(
                     appName: app.localizedName ?? "Unknown",
                     app: app,
-                    icon: app.icon ?? NSImage(),
-                    bundleUrl: app.bundleURL
+                    icon: customIcon ?? app.icon ?? NSImage(),
+                    bundleUrl: app.bundleURL,
+                    bundleID: app.bundleIdentifier ?? "",
                 )
             }
             .map { app in
