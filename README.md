@@ -3,7 +3,7 @@
 Sxitch is a native macos app switcher that uses the apps name to pick the app (and window)
 
 > [!IMPORTANT]  
-> Sxitch is open source, but not free. I personally believe that you should be able to view and modify the apps source code but I also do believe that developers should be supported in making apps for their users, and hence in MystikoLabs the goal is that most apps will be 100% Free. Sxitch is not one of those.
+> Sxitch is open source, but not free. I personally believe that you should be able to view and modify the apps source code but I also do believe that developers should be supported in making apps for their users, and hence in MystikoLabs the goal is that most apps will be open source, but they can still have a paid plan.
 
 
 ## Features:
