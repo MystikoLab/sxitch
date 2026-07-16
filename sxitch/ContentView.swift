@@ -41,6 +41,22 @@ extension UserDefaults {
     }
 }
 
+struct ArcSegment: Shape {
+    let innerRadius: CGFloat
+    let outerRadius: CGFloat
+    let startAngle: Angle
+    let endAngle: Angle
+
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        var path = Path()
+        path.addArc(center: center, radius: outerRadius, startAngle: startAngle, endAngle: endAngle, clockwise: false)
+        path.addArc(center: center, radius: innerRadius, startAngle: endAngle, endAngle: startAngle, clockwise: true)
+        path.closeSubpath()
+        return path
+    }
+}
+
 struct ContentView: View {
     @State private var openApps: [RunningApp] = RunningApp.fetchRunningApps()
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
@@ -77,6 +93,8 @@ struct ContentView: View {
                 }
                 .padding(6)
                 .id(appState.mode)
+        } else if layoutStyle == "circle" {
+                circleLayout
         } else {
                 HStack {
                     ForEach(
@@ -92,12 +110,61 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private var circleLayout: some View {
+        let filtered = openApps.filter { $0.appName.lowercased().starts(with: appState.typed.lowercased()) }
+        let count = filtered.count
+        let appCircleSize: CGFloat = 110
+        let totalAngle: Double = count >= 4 ? (2 * .pi) : .pi
+        let startAngle: Double = -.pi / 2 - totalAngle / 2
+
+        let segments = totalAngle == 2 * .pi ? max(count, 1) : max(count - 1, 1)
+        let spacing = totalAngle / Double(segments)
+        let minRadius = CGFloat(appCircleSize / spacing) * 1.4
+        let radius = max(minRadius, 50)
+
+        ZStack {
+            ForEach(Array(filtered.enumerated()), id: \.element.id) { index, app in
+                let t = Double(index) / Double(segments)
+                let angle = startAngle + t * totalAngle
+                let halfSpan = spacing / 2
+
+                ArcSegment(
+                    innerRadius: radius - appCircleSize / 2,
+                    outerRadius: radius + appCircleSize / 2,
+                    startAngle: Angle(radians: angle - halfSpan),
+                    endAngle: Angle(radians: angle + halfSpan)
+                )
+                .fill(.ultraThinMaterial)
+            }
+
+            ForEach(Array(filtered.enumerated()), id: \.element.id) { index, app in
+                let t = Double(index) / Double(segments)
+                let angle = startAngle + t * totalAngle
+                let x = radius * CGFloat(cos(angle))
+                let y = radius * CGFloat(sin(angle))
+
+                appView(app)
+                    .rotationEffect(.radians(angle + .pi / 2))
+                    .offset(x: x, y: y)
+            }
+        }
+        .frame(width: (radius + appCircleSize) * 2, height: (radius + appCircleSize) * 2)
+        .id(appState.mode)
+    }
+
     var body: some View {
-        appLayout
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.typed)
-            .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.mode)
-            .modernMacBackground()
-            .clipShape(RoundedRectangle(cornerRadius: 30))
+        Group {
+            if layoutStyle == "circle" {
+                appLayout
+            } else {
+                appLayout
+                    .modernMacBackground()
+                    .clipShape(RoundedRectangle(cornerRadius: 30))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.typed)
+        .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.mode)
             .onReceive(
                 NSWorkspace.shared.notificationCenter.publisher(
                     for: NSWorkspace.didLaunchApplicationNotification

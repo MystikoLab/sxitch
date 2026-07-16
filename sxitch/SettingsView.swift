@@ -539,6 +539,8 @@ struct ThemeSettingsView: View {
                 Picker("View Style", selection: $layoutStyle) {
                     Label("Grid", systemImage: "square.grid.2x2").tag("grid")
                     Label("List", systemImage: "list.bullet").tag("list")
+                    Label("Circle", systemImage: "circle").tag("circle")
+
                 }
                 .pickerStyle(.segmented)
             }
