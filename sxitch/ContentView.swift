@@ -431,6 +431,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.orderOut(nil)
     }
 
+    var windowPosition: Position {
+        get {
+            let raw = UserDefaults.standard.string(forKey: "windowPosition") ?? Position.default.rawValue
+            return Position(rawValue: raw) ?? .default
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "windowPosition") }
+    }
+
+    func screenWithMouse() -> NSScreen {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main!
+    }
+
     func centerWindowHorizontally() {
         let screen = window.screen ?? NSScreen.main
         let screenWidth = screen?.frame.width ?? 0
@@ -439,24 +452,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.setFrameOrigin(NSPoint(x: newX, y: currentFrame.minY))
     }
 
+    func positionWindow() {
+        if windowPosition == .default {
+            window.center()
+        } else {
+            let screen = screenWithMouse()
+            let size = window.frame.size
+            let origin = windowPosition.point(for: size, on: screen)
+            window.setFrameOrigin(origin)
+        }
+    }
+
     func resizeWindowToFit() {
         guard window.isVisible else { return }
         guard let hostingView = window.contentView else { return }
         hostingView.layoutSubtreeIfNeeded();
         let newSize = hostingView.fittingSize
         guard newSize.width > 0, newSize.height > 0 else { return }
-        let currentFrame = window.frame
-        let screen = window.screen ?? NSScreen.main
-        let screenWidth = screen?.frame.width ?? 0
-        let newX = (screenWidth - newSize.width) / 2
-        let newY = currentFrame.maxY - newSize.height
         // display: false avoids triggering an immediate display pass (which runs
         // updateConstraints) while a state change may still be pending, preventing
         // the setNeedsUpdateConstraints reentrancy that causes NSGenericException.
+        let currentFrame = window.frame
         window.setFrame(
-            NSRect(x: newX, y: newY, width: newSize.width, height: newSize.height),
+            NSRect(origin: currentFrame.origin, size: newSize),
             display: false
         )
+        if windowPosition == .default {
+            window.center()
+        } else {
+            let screen = window.screen ?? screenWithMouse()
+            let origin = windowPosition.point(for: newSize, on: screen)
+            window.setFrameOrigin(origin)
+        }
     }
 
     func applicationDidFinishLaunching(_: Notification) {
@@ -679,11 +706,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     if self.window.isVisible {
                         self.closeWindow()
                     } else {
-                        let activeScreen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
-                        if let screenFrame = activeScreen?.frame {
-                            self.window.setFrameOrigin(screenFrame.origin)
-                        }
-                        self.window.center()
+                        self.positionWindow()
                         NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                         self.window.orderFrontRegardless()
                     }
@@ -797,7 +820,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     if self.window.isVisible {
                         self.closeWindow()
                     } else {
-                        self.centerWindowHorizontally()
+                        self.positionWindow()
                         NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                         self.window.orderFrontRegardless()
                     }

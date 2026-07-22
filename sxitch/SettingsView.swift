@@ -512,7 +512,7 @@ struct ThemeSettingsView: View {
     @AppStorage("showMenuIcon") var showMenuIcon: Bool = true
     @AppStorage("accentColorHex") var accentColorHex: String = "system"
     @AppStorage("layoutStyle") var layoutStyle: String = "grid"
-
+    @AppStorage("windowPosition") var windowPosition: String = Position.default.rawValue
 
     private let presets: [(name: String, color: Color)] = [
         ("Blue", .blue),
@@ -540,9 +540,14 @@ struct ThemeSettingsView: View {
                     Label("Grid", systemImage: "square.grid.2x2").tag("grid")
                     Label("List", systemImage: "list.bullet").tag("list")
                     Label("Circle", systemImage: "circle").tag("circle")
-
                 }
                 .pickerStyle(.segmented)
+
+                Picker("Window Position", selection: $windowPosition) {
+                    ForEach(Position.allCases, id: \.rawValue) { pos in
+                        Text(pos.displayName).tag(pos.rawValue)
+                    }
+                }
             }
 
             Section("Accent Colour") {
