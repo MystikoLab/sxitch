@@ -731,46 +731,48 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 // ── App picking mode ───────────────────────────────────────
                 DispatchQueue.main.async {
-                let filteredApps = RunningApp.fetchRunningApps().filter { app in
-                    app.appName.lowercased().starts(with: candidate.lowercased())
-                }
-                if filteredApps.count == 1 {
-                    let singleApp = filteredApps[0]
-                    let windows = fetchWindowsForApp(singleApp.app)
-                    let windowPickerEnabled = UserDefaults.standard.bool(
-                        forKey: "windowPickerEnabled"
-                    )
-                    if windows.count > 1 && self.proState.isPro && windowPickerEnabled {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                            self.appState.typed = ""
+                    let filteredApps = RunningApp.fetchRunningApps().filter { app in
+                        app.appName.lowercased().starts(with: candidate.lowercased())
+                    }
+                    if filteredApps.count == 1 {
+                        let singleApp = filteredApps[0]
+                        let windows = fetchWindowsForApp(singleApp.app)
+                        let windowPickerEnabled = UserDefaults.standard.bool(
+                            forKey: "windowPickerEnabled"
+                        )
+                        if windows.count > 1 && self.proState.isPro && windowPickerEnabled {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                self.appState.typed = ""
+                                self.appState.depth = 0
+                                self.appState.drillDownApp = singleApp.app
+                            }
+                        } else if windows.count == 1 {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                windows[0].performAction(self.appState.mode)
+                            }
+                            if self.appState.mode == .normal {
+                                self.closeWindow()
+                            }
                             self.appState.depth = 0
-                            self.appState.drillDownApp = singleApp.app
+                            self.appState.typed = ""
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                singleApp.performAction(action: self.appState.mode)
+                            }
+                            if self.appState.mode == .normal {
+                                self.closeWindow()
+                            }
+                            self.appState.depth = 0
+                            self.appState.typed = ""
                         }
-                    } else if windows.count == 1 {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                            windows[0].performAction(self.appState.mode)
-                        }
-                        if self.appState.mode == .normal {
-                            self.closeWindow()
-                        }
-                        self.appState.depth = 0
-                        self.appState.typed = ""
                     } else {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                            singleApp.performAction(action: self.appState.mode)
+                        if !filteredApps.isEmpty {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                self.appState.typed = candidate
+                                self.appState.depth += pickerChar.count
+                            }
                         }
-                        if self.appState.mode == .normal {
-                            self.closeWindow()
-                        }
-                        self.appState.depth = 0
-                        self.appState.typed = ""
                     }
-                } else {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        self.appState.typed = candidate
-                        self.appState.depth += pickerChar.count
-                    }
-                }
                 }
                 return nil
             }
