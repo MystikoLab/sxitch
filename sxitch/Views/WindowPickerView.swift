@@ -1,77 +1,13 @@
-//
-//  WindowPicker.swift
-//  sxitch
-//
-//  Created by Umang on 27/6/26.
-//
-
-import ApplicationServices
 import SwiftUI
-
-// MARK: - WindowInfo
-
-struct WindowInfo: Identifiable {
-    let id: Int // index from AX enumeration
-    let title: String
-    let axElement: AXUIElement
-    let ownerApp: NSRunningApplication
-
-    func performAction(_ action: AppMode) {
-        switch action {
-        case .normal:
-            // Raise the specific window then bring the app forward
-            AXUIElementPerformAction(axElement, kAXRaiseAction as CFString)
-            ownerApp.activate(options: [])
-
-        case .hide:
-            // Minimise just this window
-            AXUIElementSetAttributeValue(
-                axElement, kAXMinimizedAttribute as CFString, true as CFTypeRef
-            )
-
-        case .quit:
-            // Press the window's close button
-            var pid: pid_t = 0
-            AXUIElementGetPid(axElement, &pid)
-            if pid != 0 {
-                NSRunningApplication(processIdentifier: pid)?.terminate()
-            }
-        }
-    }
-}
-
-// MARK: - Fetch windows via Accessibility API
-
-func fetchWindowsForApp(_ nsApp: NSRunningApplication) -> [WindowInfo] {
-    let axApp = AXUIElementCreateApplication(nsApp.processIdentifier)
-    var windowsRef: CFTypeRef?
-    guard
-        AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef)
-        == .success,
-        let axWindows = windowsRef as? [AXUIElement]
-    else { return [] }
-
-    return axWindows.enumerated().compactMap { index, axWindow in
-        var titleRef: CFTypeRef?
-        guard
-            AXUIElementCopyAttributeValue(axWindow, kAXTitleAttribute as CFString, &titleRef)
-            == .success,
-            let title = titleRef as? String,
-            !title.isEmpty
-        else { return nil }
-        return WindowInfo(id: index, title: title, axElement: axWindow, ownerApp: nsApp)
-    }
-}
-
-// MARK: - WindowPickerView
 
 struct WindowPickerView: View {
     let windows: [WindowInfo]
     let appName: String
     let appIcon: NSImage
     let typed: String
-    let appMode: AppMode
     let onSelect: () -> Void
+
+    @Environment(\.modeTheme) var modeTheme
 
     @AppStorage("layoutStyle") private var layoutStyle: String = "grid"
 
@@ -81,17 +17,8 @@ struct WindowPickerView: View {
             : windows.filter { $0.title.lowercased().starts(with: typed.lowercased()) }
     }
 
-    var modeColor: Color {
-        switch appMode {
-        case .quit: return .red.opacity(0.8)
-        case .hide: return .orange.opacity(0.8)
-        case .normal: return .primary
-        }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            // Header row
             HStack(spacing: 8) {
                 Image(nsImage: appIcon)
                     .resizable()
@@ -153,7 +80,6 @@ struct WindowPickerView: View {
                    })
                 {
                     Text(String(nextChar).uppercased())
-                        .foregroundStyle(appMode == .normal ? Color.primary : modeColor)
                         .font(.caption2)
                         .padding(3)
                         .frame(width: 14, height: 14)
@@ -166,7 +92,7 @@ struct WindowPickerView: View {
                 .font(.caption)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
-                .foregroundStyle(appMode == .normal ? Color.primary : modeColor)
+                .foregroundStyle(modeTheme.foregroundStyle)
                 .opacity(0.85)
         }
         .padding(8)
@@ -177,7 +103,7 @@ struct WindowPickerView: View {
                 .fill(Color(nsColor: .windowBackgroundColor).opacity(0.4))
         )
         .onTapGesture {
-            window.performAction(appMode)
+            modeTheme.windowAction(window)
             onSelect()
         }
     }
@@ -190,14 +116,12 @@ struct WindowPickerView: View {
                     .resizable()
                     .frame(width: 36, height: 36)
 
-                // Show the next character badge, same as the app picker
                 if !typed.isEmpty,
                    let nextChar = window.title.dropFirst(typed.count).first(where: {
                        !$0.isWhitespace
                    })
                 {
                     Text(String(nextChar).uppercased())
-                        .foregroundStyle(appMode == .normal ? Color.primary : modeColor)
                         .font(.caption2)
                         .padding(3)
                         .frame(width: 14, height: 14)
@@ -208,7 +132,7 @@ struct WindowPickerView: View {
 
             Text(window.title)
                 .lineLimit(1)
-                .foregroundStyle(appMode == .normal ? Color.primary : modeColor)
+                .foregroundStyle(modeTheme.foregroundStyle)
                 .opacity(0.85)
             Spacer()
         }
@@ -216,7 +140,7 @@ struct WindowPickerView: View {
         .padding(.vertical, 10)
         .contentShape(Rectangle())
         .onTapGesture {
-            window.performAction(appMode)
+            modeTheme.windowAction(window)
             onSelect()
         }
         Divider().opacity(0.4)
