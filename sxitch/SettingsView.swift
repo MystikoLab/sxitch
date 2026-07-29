@@ -99,6 +99,7 @@ struct GeneralSettingsView: View {
     @AppStorage("launchAtLogin") private var launchAtLogin: Bool = true
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
     @AppStorage("windowPickerEnabled") private var windowPickerEnabled: Bool = true
+    @AppStorage("showPickerUi") private var showUi = true
     @Environment(\.openWindow) private var openWindow
     private var usState = userState.shared
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
@@ -365,6 +366,14 @@ struct GeneralSettingsView: View {
                         }
                     }
             }
+            
+            Section {
+                Toggle("Show picker UI", isOn: $showUi)
+                    .onChange(of: showUi) { oldValue, newValue in
+                        showUi = newValue
+                    }
+            }
+
             Section("Setup") {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {

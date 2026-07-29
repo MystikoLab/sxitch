@@ -67,6 +67,8 @@ struct ContentView: View {
     @AppStorage("appBlacklists") var blacklist: [String] = []
     @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"]
     @AppStorage("layoutStyle") var layoutStyle: String = "grid"
+    @AppStorage("showPickerUi") private var showUi = true
+
 
     @ObservedObject var appState: AppState
     @State private var drillDownWindows: [WindowInfo] = []
@@ -75,38 +77,42 @@ struct ContentView: View {
 
     @ViewBuilder
     private var appLayout: some View {
-        if let drillApp = appState.drillDownApp {
-            WindowPickerView(
-                windows: drillDownWindows,
-                appName: drillApp.localizedName ?? "Unknown",
-                appIcon: drillApp.icon ?? NSImage(),
-                typed: appState.typed,
-                appMode: appState.mode
-            ) {
-                appDelegate.closeWindow()
-            }
-        } else if layoutStyle == "list" {
-                VStack(spacing: 0) {
-                    ForEach(openApps, id: \.id) { app in
-                        listRow(app)
-                    }
-                }
-                .padding(6)
-                .id(appState.mode)
-        } else if layoutStyle == "circle" {
-                circleLayout
+        if !showUi {
+            
         } else {
-                HStack {
-                    ForEach(
-                        openApps.filter {
-                            $0.appName.lowercased().starts(with: appState.typed.lowercased())
-                        }, id: \.id
-                    ) { app in
-                        appView(app)
-                    }
+            if let drillApp = appState.drillDownApp {
+                WindowPickerView(
+                    windows: drillDownWindows,
+                    appName: drillApp.localizedName ?? "Unknown",
+                    appIcon: drillApp.icon ?? NSImage(),
+                    typed: appState.typed,
+                    appMode: appState.mode
+                ) {
+                    appDelegate.closeWindow()
                 }
-                .id(appState.mode)
-                .frame(alignment: .center)
+            } else if layoutStyle == "list" {
+                    VStack(spacing: 0) {
+                        ForEach(openApps, id: \.id) { app in
+                            listRow(app)
+                        }
+                    }
+                    .padding(6)
+                    .id(appState.mode)
+            } else if layoutStyle == "circle" {
+                    circleLayout
+            } else {
+                    HStack {
+                        ForEach(
+                            openApps.filter {
+                                $0.appName.lowercased().starts(with: appState.typed.lowercased())
+                            }, id: \.id
+                        ) { app in
+                            appView(app)
+                        }
+                    }
+                    .id(appState.mode)
+                    .frame(alignment: .center)
+            }
         }
     }
 

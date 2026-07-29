@@ -19,7 +19,11 @@ struct sxitchApp: App {
                 if appState.isPro {
                     Text("Sxitch Pro")
                 } else {
-                    Text("Sxitch Free")
+                    Button("Sxitch Free") {
+                        if let url = URL(string: "https://sxitch.app") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
                 }
             } icon: {
                 Image(nsImage: makeMenuBarIcon())
