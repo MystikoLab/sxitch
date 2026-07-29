@@ -331,6 +331,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionCheckTimer: Timer?
     var allModifiersHeldPreviously: Bool = false
     var heldModifierKeyCodes: Set<Int64> = []
+    private var cancellables = Set<AnyCancellable>()
+    var cachedAppNames: [String] = []
     let keyCodeToChar: [Int64: Character] = [
         0: "a", 11: "b", 8: "c", 2: "d", 14: "e", 3: "f", 5: "g",
         4: "h", 34: "i", 38: "j", 40: "k", 37: "l", 46: "m", 45: "n",
@@ -562,6 +564,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         setupEventTap()
+        setupAutoSelect()
+        refreshCachedAppNames()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(refreshCachedAppNames),
+            name: NSWorkspace.didLaunchApplicationNotification, object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(refreshCachedAppNames),
+            name: NSWorkspace.didTerminateApplicationNotification, object: nil
+        )
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
             [weak self] _ in
             guard let self = self else { return }
@@ -569,6 +581,78 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.closeWindow()
             }
         }
+    }
+
+    func setupAutoSelect() {
+        appState.$typed
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+            .sink { [weak self] typed in
+                guard let self = self, !typed.isEmpty, self.window.isVisible else { return }
+
+                if let drillApp = self.appState.drillDownApp {
+                    let allWindows = fetchWindowsForApp(drillApp)
+                    let matched = allWindows.filter {
+                        $0.title.lowercased().starts(with: typed.lowercased())
+                    }
+                    if matched.count == 1 {
+                        matched[0].performAction(self.appState.mode)
+                        self.appState.depth = 0
+                        self.appState.typed = ""
+                        if self.appState.mode == .normal {
+                            self.closeWindow()
+                        }
+                    }
+                } else {
+                    let filteredApps = RunningApp.fetchRunningApps().filter {
+                        $0.appName.lowercased().starts(with: typed.lowercased())
+                    }
+                    if filteredApps.count == 1 {
+                        let singleApp = filteredApps[0]
+                        let windows = fetchWindowsForApp(singleApp.app)
+                        let windowPickerEnabled = UserDefaults.standard.bool(
+                            forKey: "windowPickerEnabled"
+                        )
+                        if windows.count > 1 && self.proState.isPro && windowPickerEnabled {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                                self.appState.typed = ""
+                                self.appState.depth = 0
+                                self.appState.drillDownApp = singleApp.app
+                            }
+                        } else if windows.count == 1 {
+                            windows[0].performAction(self.appState.mode)
+                            if self.appState.mode == .normal { self.closeWindow() }
+                            self.appState.depth = 0
+                            self.appState.typed = ""
+                        } else {
+                            singleApp.performAction(action: self.appState.mode)
+                            if self.appState.mode == .normal { self.closeWindow() }
+                            self.appState.depth = 0
+                            self.appState.typed = ""
+                        }
+                    }
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    @objc func refreshCachedAppNames() {
+        let blacklist = UserDefaults.standard.stringArray(forKey: "appBlacklists") ?? []
+        let prefixStrips = UserDefaults.standard.stringArray(forKey: "prefixStrips") ?? ["microsoft", "adobe"]
+        let usState = userState.shared
+        cachedAppNames = NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular }
+            .map { $0.localizedName ?? "Unknown" }
+            .map { name in
+                var appName = name
+                for prefix in prefixStrips {
+                    if appName.lowercased().hasPrefix(prefix.lowercased()) {
+                        appName = String(appName.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                        break
+                    }
+                }
+                return appName.lowercased()
+            }
+            .filter { !blacklist.contains($0) || !usState.isPro }
     }
 
     func setupEventTap() {
@@ -639,7 +723,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if keyCode == 53, window.isVisible {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            DispatchQueue.main.async {
                 if self.appState.drillDownApp != nil {
                     if self.appState.typed.isEmpty {
                         self.appState.drillDownApp = nil
@@ -734,74 +818,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     pickerChar = raw
                 }
                 let candidate = appState.typed + pickerChar
-
-                // ── Window picking mode ────────────────────────────────────
-                if let drillApp = appState.drillDownApp {
-                    let allWindows = fetchWindowsForApp(drillApp)
-                    let matchedWindows = allWindows.filter {
-                        $0.title.lowercased().starts(with: candidate.lowercased())
-                    }
-                    if matchedWindows.count == 1 {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                            matchedWindows[0].performAction(self.appState.mode)
-                            self.closeWindow()
-                        }
-                        appState.depth = 0
-                        appState.typed = ""
-                    } else if !matchedWindows.isEmpty {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                            self.appState.typed = candidate
-                            self.appState.depth += pickerChar.count
-                        }
-                    }
-                    // if nothing matches, swallow the keystroke silently
-                    return nil
-                }
-
-                // ── App picking mode ───────────────────────────────────────
+                let matches = cachedAppNames.contains { $0.hasPrefix(candidate.lowercased()) }
+                guard matches else { return nil }
                 DispatchQueue.main.async {
-                    let filteredApps = RunningApp.fetchRunningApps().filter { app in
-                        app.appName.lowercased().starts(with: candidate.lowercased())
-                    }
-                    if filteredApps.count == 1 {
-                        let singleApp = filteredApps[0]
-                        let windows = fetchWindowsForApp(singleApp.app)
-                        let windowPickerEnabled = UserDefaults.standard.bool(
-                            forKey: "windowPickerEnabled"
-                        )
-                        if windows.count > 1 && self.proState.isPro && windowPickerEnabled {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                self.appState.typed = ""
-                                self.appState.depth = 0
-                                self.appState.drillDownApp = singleApp.app
-                            }
-                        } else if windows.count == 1 {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                windows[0].performAction(self.appState.mode)
-                            }
-                            if self.appState.mode == .normal {
-                                self.closeWindow()
-                            }
-                            self.appState.depth = 0
-                            self.appState.typed = ""
-                        } else {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                singleApp.performAction(action: self.appState.mode)
-                            }
-                            if self.appState.mode == .normal {
-                                self.closeWindow()
-                            }
-                            self.appState.depth = 0
-                            self.appState.typed = ""
-                        }
-                    } else {
-                        if !filteredApps.isEmpty {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                self.appState.typed = candidate
-                                self.appState.depth += pickerChar.count
-                            }
-                        }
-                    }
+                    self.appState.typed = candidate
+                    self.appState.depth += pickerChar.count
                 }
                 return nil
             }
