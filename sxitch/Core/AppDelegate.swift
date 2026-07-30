@@ -284,29 +284,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     if filteredApps.count == 1 {
                         let singleApp = filteredApps[0]
+                        let theme = ModeTheme.theme(for: self.appState.mode)
                         let windows = fetchWindowsForApp(singleApp.app)
-                        let windowPickerEnabled = UserDefaults.standard.bool(
-                            forKey: "windowPickerEnabled"
-                        )
-                        if windows.count > 1 && self.proState.isPro && windowPickerEnabled {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                                self.appState.typed = ""
-                                self.appState.depth = 0
-                                self.appState.drillDownApp = singleApp.app
-                            }
-                        } else if windows.count == 1 {
-                            let theme = ModeTheme.theme(for: self.appState.mode)
+                        if windows.count == 1 {
                             theme.windowAction(windows[0])
-                            if self.appState.mode == .normal { self.closeWindow() }
-                            self.appState.depth = 0
-                            self.appState.typed = ""
                         } else {
-                            let theme = ModeTheme.theme(for: self.appState.mode)
                             theme.appAction(singleApp)
-                            if self.appState.mode == .normal { self.closeWindow() }
-                            self.appState.depth = 0
-                            self.appState.typed = ""
                         }
+                        if self.appState.mode == .normal { self.closeWindow() }
+                        self.appState.depth = 0
+                        self.appState.typed = ""
                     }
                 }
             }
@@ -494,8 +481,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     pickerChar = raw
                 }
                 let candidate = appState.typed + pickerChar
-                let matches = cachedAppNames.contains { $0.hasPrefix(candidate.lowercased()) }
-                guard matches else { return nil }
+                let candidateLower = candidate.lowercased()
+                let matchingNames = cachedAppNames.filter { $0.hasPrefix(candidateLower) }
+                if matchingNames.isEmpty { return nil }
+                if matchingNames.count == 1, appState.drillDownApp == nil {
+                    let name = matchingNames[0]
+                    DispatchQueue.main.async {
+                        let allApps = RunningApp.fetchRunningApps()
+                        let filtered = allApps.filter { $0.appName.lowercased() == name }
+                        if let app = filtered.first {
+                            let theme = ModeTheme.theme(for: self.appState.mode)
+                            let windows = fetchWindowsForApp(app.app)
+                            if windows.count == 1 {
+                                theme.windowAction(windows[0])
+                            } else {
+                                theme.appAction(app)
+                            }
+                            if self.appState.mode == .normal { self.closeWindow() }
+                        }
+                    }
+                    return nil
+                }
                 DispatchQueue.main.async {
                     self.appState.typed = candidate
                     self.appState.depth += pickerChar.count
