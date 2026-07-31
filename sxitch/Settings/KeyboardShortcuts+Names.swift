@@ -11,4 +11,5 @@ extension Notification.Name {
     static let appHotkeyAdded = Notification.Name("appHotkeyAdded")
     static let onboardingCompleted = Notification.Name("onboardingCompleted")
     static let switcherWillShow = Notification.Name("sxitch.switcherWillShow")
+    static let openSettingsRequested = Notification.Name("sxitch.openSettingsRequested")
 }

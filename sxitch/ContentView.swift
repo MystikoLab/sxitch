@@ -86,6 +86,11 @@ struct ContentView: View {
                     appDelegate.resizeWindowToFit()
                 }
             }
+            .onReceive(
+                NotificationCenter.default.publisher(for: .openSettingsRequested)
+            ) { _ in
+                openSettings()
+            }
             .onKeyPress(.escape) {
                 if appState.drillDownApp != nil {
                     if appState.typed.isEmpty {

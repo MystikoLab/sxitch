@@ -403,10 +403,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if window.isVisible, flags.contains(.maskCommand), keyCode == 43 {
             closeWindow()
-            if #available(macOS 14.0, *) {
-                NSApp.sendAction(Selector(("openSettings:")), to: nil, from: nil)
-            } else {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .openSettingsRequested, object: nil)
             }
             return nil
         } else if window.isVisible, flags.contains(.maskCommand), keyCode == 12 {
