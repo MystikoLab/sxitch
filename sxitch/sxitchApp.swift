@@ -39,7 +39,7 @@ struct sxitchApp: App {
             }
             Divider()
             Button("Github", systemImage: "chevron.left.forwardslash.chevron.right") {
-                if let github = URL(string: "https://github.com/unsecretised/sxitch-public") {
+                if let github = URL(string: "https://github.com/MystikoLab/sxitch") {
                     NSWorkspace.shared.open(github)
                 }
             }
