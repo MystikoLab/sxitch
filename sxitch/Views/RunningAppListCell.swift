@@ -16,7 +16,7 @@ struct RunningAppListCell: View {
 
                 if let nextChar = app.appName.dropFirst(depth).first(where: { !$0.isWhitespace }) {
                     Text(String(nextChar).uppercased())
-                        .foregroundStyle(app.appMode == .normal ? Color.primary : modeTheme.foregroundStyle)
+                        .foregroundStyle(modeTheme.foregroundStyle)
                         .font(.caption2)
                         .padding(4)
                         .frame(width: 16, height: 16)
@@ -27,7 +27,7 @@ struct RunningAppListCell: View {
 
             Text(app.appName)
                 .opacity(0.7)
-                .foregroundStyle(app.appMode == .normal ? Color.primary : modeTheme.foregroundStyle)
+                .foregroundStyle(modeTheme.foregroundStyle)
 
             Spacer()
         }

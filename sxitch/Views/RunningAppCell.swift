@@ -16,7 +16,7 @@ struct RunningAppCell: View {
 
                 if let nextChar = app.appName.dropFirst(depth).first(where: { !$0.isWhitespace }) {
                     Text(String(nextChar).uppercased())
-                        .foregroundStyle(app.appMode == .normal ? Color.primary : modeTheme.foregroundStyle)
+                        .foregroundStyle(modeTheme.foregroundStyle)
                         .font(.callout)
                         .padding(3)
                         .frame(width: 23, height: 23)
@@ -26,7 +26,7 @@ struct RunningAppCell: View {
             }
             Text(app.appName)
                 .opacity(0.7)
-                .foregroundStyle(app.appMode == .normal ? Color.primary : modeTheme.foregroundStyle)
+                .foregroundStyle(modeTheme.foregroundStyle)
         }
         .frame(maxWidth: 60)
         .padding(20)

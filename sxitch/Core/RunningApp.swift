@@ -3,7 +3,7 @@ import SwiftUI
 
 struct RunningApp: Identifiable, Equatable {
     static func == (lhs: RunningApp, rhs: RunningApp) -> Bool {
-        lhs.id == rhs.id && lhs.depth == rhs.depth && lhs.appMode == rhs.appMode
+        lhs.id == rhs.id && lhs.depth == rhs.depth
     }
 
     var id: Int32 { app.processIdentifier }
@@ -14,7 +14,6 @@ struct RunningApp: Identifiable, Equatable {
     var bundleUrl: URL?
     var bundleID: String
     var depth: Int = 0
-    var appMode: AppMode = .normal
     var overrideTap: ((RunningApp) -> Void)? = nil
 
     static func fetchRunningApps() -> [RunningApp] {
