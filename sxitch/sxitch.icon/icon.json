@@ -1,0 +1,38 @@
+{
+  "fill" : {
+    "automatic-gradient" : "srgb:0.98012,0.98666,1.00000,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.94377,0.96915,1.00000,1.00000"
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "sxitch_icon_nobg.png",
+          "name" : "sxitch_icon_nobg"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
