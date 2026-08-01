@@ -178,6 +178,31 @@ struct GeneralSettingsView: View, SettingsTab {
                 }
                 .pickerStyle(.segmented)
             }
+            Section("Mode Hotkeys") {
+                HStack {
+                    Text("Hide mode")
+                    Spacer()
+                    KeyboardShortcuts.Recorder(for: .hideMode)
+                        .disabled(!usState.isPro)
+                }
+                HStack {
+                    Text("Quit mode")
+                    Spacer()
+                    KeyboardShortcuts.Recorder(for: .quitMode)
+                        .disabled(!usState.isPro)
+                }
+                if !usState.isPro {
+                    HStack {
+                        Label("Pro", systemImage: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
+                Text("While the switcher is open, the shortcut toggles the corresponding action mode.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section {
                 HStack {
                     Toggle("Window Picker", isOn: $windowPickerEnabled)

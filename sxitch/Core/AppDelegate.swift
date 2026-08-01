@@ -120,6 +120,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.orderOut(nil)
     }
 
+    private func toggleMode(_ mode: AppMode) {
+        guard window.isVisible, proState.isPro else { return }
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
+                self.appState.mode = self.appState.mode == mode ? .normal : mode
+            }
+        }
+    }
+
     var windowPosition: Position {
         get {
             let raw = UserDefaults.standard.string(forKey: "windowPosition") ?? Position.default.rawValue
@@ -236,6 +245,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     NSWorkspace.shared.openApplication(at: url, configuration: config)
                 }
             }
+        }
+
+        KeyboardShortcuts.onKeyDown(for: .hideMode) { [weak self] in
+            self?.toggleMode(.hide)
+        }
+        KeyboardShortcuts.onKeyDown(for: .quitMode) { [weak self] in
+            self?.toggleMode(.quit)
         }
 
         setupEventTap()
@@ -410,31 +426,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else if window.isVisible, flags.contains(.maskCommand), keyCode == 12 {
             NSApp.terminate(nil)
             return nil
-        }
-
-        if window.isVisible, flags.contains(.maskControl), proState.isPro {
-            if keyCode == 12 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
-                        self.appState.mode = self.appState.mode == .quit ? .normal : .quit
-                    }
-                }
-                return nil
-            } else if keyCode == 4 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
-                        self.appState.mode = self.appState.mode == .hide ? .normal : .hide
-                    }
-                }
-                return nil
-            } else if keyCode == 45 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
-                        self.appState.mode = .normal
-                    }
-                }
-                return nil
-            }
         }
 
         if proState.isPro {

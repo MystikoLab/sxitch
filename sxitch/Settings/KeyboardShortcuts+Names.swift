@@ -1,7 +1,17 @@
+import AppKit
 import KeyboardShortcuts
 import Foundation
 
 extension KeyboardShortcuts.Name {
+    static let hideMode = Self(
+        "sxitch_hideMode",
+        initial: .init(.h, modifiers: [.control])
+    )
+    static let quitMode = Self(
+        "sxitch_quitMode",
+        initial: .init(.q, modifiers: [.control])
+    )
+
     static func appLaunch(_ bundleURL: String) -> Self {
         .init("appLaunch_\(bundleURL)")
     }
