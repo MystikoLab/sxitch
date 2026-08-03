@@ -54,6 +54,12 @@ struct sxitchApp: App {
                 }
             }
             Divider()
+            Button("Report a bug", systemImage: "info.triangle.fill") {
+                if let community = URL(string: "https://github.com/MystikoLab/sxitch/issues/new") {
+                    NSWorkspace.shared.open(community)
+                }
+            }
+
             SettingsLink()
             Button("Quit Sxitch", systemImage: "xmark.circle", role: .destructive) {
                 NSApp.terminate(nil)
