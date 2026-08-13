@@ -254,6 +254,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.toggleMode(.quit)
         }
 
+        window.publisher(for: \.isVisible)
+            .removeDuplicates()
+            .sink { isVisible in
+                if isVisible {
+                    KeyboardShortcuts.enable([.hideMode, .quitMode])
+                } else {
+                    KeyboardShortcuts.disable([.hideMode, .quitMode])
+                }
+            }
+            .store(in: &cancellables)
+
+
         setupEventTap()
         setupAutoSelect()
         refreshCachedAppNames()
