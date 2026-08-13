@@ -11,6 +11,7 @@ enum Position: String, CaseIterable, Codable {
     case bottomLeft
     case bottomCenter
     case bottomRight
+    case mousePos
 
     var displayName: String {
         switch self {
@@ -24,13 +25,14 @@ enum Position: String, CaseIterable, Codable {
         case .bottomLeft: "Bottom Left"
         case .bottomCenter: "Bottom Center"
         case .bottomRight: "Bottom Right"
+        case .mousePos: "Mouse Position"
         }
     }
 
     func point(for size: NSSize, on screen: NSScreen) -> NSPoint {
         let frame = screen.frame
         switch self {
-        case .default:
+        case .default, .mousePos:
             return NSPoint(
                 x: frame.origin.x + (frame.width - size.width) / 2,
                 y: frame.origin.y + (frame.height - size.height) / 2
