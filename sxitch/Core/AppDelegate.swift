@@ -153,6 +153,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func positionWindow() {
         if windowPosition == .default {
             window.center()
+        }
+        else if windowPosition == .mousePos {
+            let mouseLocation = NSEvent.mouseLocation
+            let screen = screenWithMouse()
+            let size = window.frame.size
+
+            var origin = NSPoint(
+                x: mouseLocation.x - size.width / 2,
+                y: mouseLocation.y - size.height / 2
+            )
+
+            // Clamp to the screen's visible frame so it doesn't hang off an edge
+            let visible = screen.visibleFrame
+            origin.x = min(max(origin.x, visible.minX), visible.maxX - size.width)
+            origin.y = min(max(origin.y, visible.minY), visible.maxY - size.height)
+
+            window.setFrameOrigin(origin)
         } else {
             let screen = screenWithMouse()
             let size = window.frame.size
@@ -174,7 +191,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         if windowPosition == .default {
             window.center()
-        } else {
+        } else if windowPosition != .mousePos {
             let screen = window.screen ?? screenWithMouse()
             let origin = windowPosition.point(for: newSize, on: screen)
             window.setFrameOrigin(origin)
