@@ -1,0 +1,1 @@
+Temporary to see how well AI would rewrite the app in swift. Was honestly pretty ass (but it was a free model + a "rewrite this rust app to swift and make no mistakes" so it was expected) Just keeping it here in case anyone's interested in this.
