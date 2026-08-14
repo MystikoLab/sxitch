@@ -270,14 +270,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         KeyboardShortcuts.onKeyDown(for: .quitMode) { [weak self] in
             self?.toggleMode(.quit)
         }
+        KeyboardShortcuts.onKeyDown(for: .normalMode) { [weak self] in
+            self?.toggleMode(.normal)
+        }
 
         window.publisher(for: \.isVisible)
             .removeDuplicates()
             .sink { isVisible in
                 if isVisible {
-                    KeyboardShortcuts.enable([.hideMode, .quitMode])
+                    KeyboardShortcuts.enable([.hideMode, .quitMode, .normalMode])
                 } else {
-                    KeyboardShortcuts.disable([.hideMode, .quitMode])
+                    KeyboardShortcuts.disable([.hideMode, .quitMode, .normalMode])
                 }
             }
             .store(in: &cancellables)

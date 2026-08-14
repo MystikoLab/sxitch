@@ -12,6 +12,11 @@ extension KeyboardShortcuts.Name {
         initial: .init(.q, modifiers: [.control])
     )
 
+    static let normalMode = Self(
+        "sxitch_normalMode",
+        initial: .init(.n, modifiers: [.control])
+    )
+
     static func appLaunch(_ bundleURL: String) -> Self {
         .init("appLaunch_\(bundleURL)")
     }
