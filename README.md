@@ -10,14 +10,24 @@ Sxitch is a native macos app switcher that uses the apps name to pick the app (a
 - App picking
 - Window picking (Pro)
 - Hiding / quitting modes (Pro)
-- List view
+- List and Radial view
 - Blacklists (Pro)
 - Prefix stripping
 - Key Overrides (Pro)
 - App based hotkey (Pro)
+- Customisable window position
+
+## Roadmap:
+- Customsiable modes
+  - Launch apps
+  - Call shell commands
+  - Customise icons
+  - Integrate with WMs
+- "Dock" mode (launch apps + apps kept in the dock)
+- Optional "enter" mode (require confirmation before switching)
 
 ## Sxitch Pricing:
-- $2/mth (after 5 consecutive months I'll send u a discount code for 100% off sxitch, the goal of the subscripion is to let you try the pro version)
+- $2/mth (after 6 consecutive months I'll send u a discount code for 100% off sxitch, the goal of the subscripion is to let you try the pro version)
 - $10 (One time payment)
 - Free plan (But missing features)
 
