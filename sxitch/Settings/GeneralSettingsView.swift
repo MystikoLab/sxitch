@@ -191,6 +191,12 @@ struct GeneralSettingsView: View, SettingsTab {
                     KeyboardShortcuts.Recorder(for: .quitMode)
                         .disabled(!usState.isPro)
                 }
+                HStack {
+                    Text("Normal mode")
+                    Spacer()
+                    KeyboardShortcuts.Recorder(for: .normalMode)
+                        .disabled(!usState.isPro)
+                }
                 if !usState.isPro {
                     HStack {
                         Label("Pro", systemImage: "lock.fill")
