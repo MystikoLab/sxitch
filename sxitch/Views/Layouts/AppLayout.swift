@@ -2,16 +2,16 @@ import SwiftUI
 
 protocol AppLayout: View {
     associatedtype Content: View
-    var apps: [RunningApp] { get }
+    var apps: [any SwitchableApp] { get }
     var typed: String { get }
-    var onTap: (RunningApp) -> Void { get }
-    init(apps: [RunningApp], typed: String, onTap: @escaping (RunningApp) -> Void)
+    var onTap: (any SwitchableApp) -> Void { get }
+    init(apps: [any SwitchableApp], typed: String, onTap: @escaping (any SwitchableApp) -> Void)
 }
 
 struct AnyAppLayout: View {
-    let apps: [RunningApp]
+    let apps: [any SwitchableApp]
     let typed: String
-    let onTap: (RunningApp) -> Void
+    let onTap: (any SwitchableApp) -> Void
     let layoutStyle: String
 
     var body: some View {

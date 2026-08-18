@@ -34,12 +34,7 @@ struct SettingsView: View {
                     .tag(tab.id)
             }
         }
-        .onAppear {
-            if let window = NSApp.mainWindow {
-                window.level = .floating
-            }
-        }
-        .frame(width: 800, height: 600)
+        .frame(minWidth: 800, minHeight: 600)
         .tint(accentColor)
     }
 }

@@ -3,13 +3,13 @@ import SwiftUI
 struct ModeTheme {
     let overlayColor: Color
     let foregroundStyle: Color
-    let appAction: (RunningApp) -> Void
+    let appAction: (any SwitchableApp) -> Void
     let windowAction: (WindowInfo) -> Void
 
     static let normal = ModeTheme(
         overlayColor: .clear,
         foregroundStyle: .primary,
-        appAction: { $0.openApp() },
+        appAction: { $0.activate() },
         windowAction: { window in
             AXUIElementPerformAction(window.axElement, kAXRaiseAction as CFString)
             window.ownerApp.activate(options: [])

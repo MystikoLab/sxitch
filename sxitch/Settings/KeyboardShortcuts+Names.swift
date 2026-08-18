@@ -20,6 +20,10 @@ extension KeyboardShortcuts.Name {
     static func appLaunch(_ bundleURL: String) -> Self {
         .init("appLaunch_\(bundleURL)")
     }
+
+    static func customMode(_ id: String) -> Self {
+        .init("customMode_\(id)")
+    }
 }
 
 extension Notification.Name {
@@ -28,4 +32,5 @@ extension Notification.Name {
     static let switcherWillShow = Notification.Name("sxitch.switcherWillShow")
     static let openSettingsRequested = Notification.Name("sxitch.openSettingsRequested")
     static let appSettingsChanged = Notification.Name("appSettingsChanged")
+    static let customModesChanged = Notification.Name("sxitch.customModesChanged")
 }
