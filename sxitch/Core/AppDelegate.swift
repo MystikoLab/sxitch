@@ -245,6 +245,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.window.orderFrontRegardless()
         }
 
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(refreshCachedAppNames),
+            name: .appSettingsChanged, object: nil
+        )
+
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
             selector: #selector(activeAppChanged),
@@ -349,8 +354,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func refreshCachedAppNames() {
-        let blacklist = UserDefaults.standard.stringArray(forKey: "appBlacklists") ?? []
-        let prefixStrips = UserDefaults.standard.stringArray(forKey: "prefixStrips") ?? ["microsoft", "adobe"]
+        @AppStorage("appBlacklists") var blacklist: [String] = []
+        @AppStorage("prefixStrips") var prefixStrips: [String] = ["microsoft", "adobe"]
         let usState = userState.shared
         cachedAppNames = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular }
@@ -503,7 +508,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 let candidate = appState.typed + pickerChar
                 let candidateLower = candidate.lowercased()
-                let matchingNames = cachedAppNames.filter { $0.hasPrefix(candidateLower) }
+                let matchingNames = cachedAppNames.filter { app in
+                    app.hasPrefix(candidateLower)
+                }
                 if matchingNames.isEmpty { return nil }
                 if matchingNames.count == 1, appState.drillDownApp == nil {
                     let name = matchingNames[0]
