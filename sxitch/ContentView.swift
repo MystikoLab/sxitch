@@ -81,6 +81,7 @@ struct ContentView: View {
             .onReceive(
                 NotificationCenter.default.publisher(for: .switcherWillShow)
             ) { _ in
+                appDelegate.refreshCachedAppNames()
                 openApps = RunningApp.fetchRunningApps()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     appDelegate.resizeWindowToFit()
@@ -107,9 +108,11 @@ struct ContentView: View {
             }
             .onChange(of: blacklist) { _, _ in
                 openApps = RunningApp.fetchRunningApps()
+                NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
             }
             .onChange(of: prefixStrip) { _, _ in
                 openApps = RunningApp.fetchRunningApps()
+                NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
             }
             .onChange(of: openApps) { _, _ in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
