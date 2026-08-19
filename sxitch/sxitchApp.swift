@@ -70,13 +70,6 @@ struct sxitchApp: App {
 
         Settings {
             SettingsView()
-                .onAppear {
-                    DispatchQueue.main.async {
-                        for window in NSApp.windows where window.styleMask.contains(.titled) {
-                            window.level = .floating
-                        }
-                    }
-                }
         }
         .windowStyle(.hiddenTitleBar)
 

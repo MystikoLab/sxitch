@@ -19,5 +19,6 @@ struct RegisteredTabs {
         AnySettingsTab(id: "theme", title: "Theme", icon: "paintpalette.fill", content: AnyView(ThemeSettingsView())),
         AnySettingsTab(id: "advanced", title: "Advanced", icon: "slider.horizontal.3", content: AnyView(AdvancedSettingsView())),
         AnySettingsTab(id: "activate", title: "Activate", icon: "lock", content: AnyView(ActivateSettingsView())),
+        AnySettingsTab(id: "modes", title: "Modes", icon: "square.stack.3d.up", content: AnyView(CustomModesSettingsView())),
     ]
 }

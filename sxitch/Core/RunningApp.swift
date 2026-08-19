@@ -1,12 +1,12 @@
 import AppKit
 import SwiftUI
 
-struct RunningApp: Identifiable, Equatable {
+struct RunningApp: SwitchableApp, Equatable {
     static func == (lhs: RunningApp, rhs: RunningApp) -> Bool {
         lhs.id == rhs.id && lhs.depth == rhs.depth
     }
 
-    var id: Int32 { app.processIdentifier }
+    var id: String { "\(app.processIdentifier)" }
 
     var appName: String
     var app: NSRunningApplication
@@ -14,7 +14,10 @@ struct RunningApp: Identifiable, Equatable {
     var bundleUrl: URL?
     var bundleID: String
     var depth: Int = 0
-    var overrideTap: ((RunningApp) -> Void)? = nil
+    var symbolName: String? = nil
+    var overrideTap: ((any SwitchableApp) -> Void)? = nil
+
+    var runningApplication: NSRunningApplication? { app }
 
     static func fetchRunningApps() -> [RunningApp] {
         let usState = userState.shared
@@ -51,7 +54,7 @@ struct RunningApp: Identifiable, Equatable {
 
     func performAction(action: AppMode) {
         switch action {
-        case .normal: openApp()
+        case .normal: activate()
         case .hide: hideApp()
         case .quit: quitApp()
         }
@@ -64,7 +67,7 @@ struct RunningApp: Identifiable, Equatable {
         app.terminate()
     }
 
-    func openApp() {
+    func activate() {
         if let bundleUrl = bundleUrl {
             NSWorkspace.shared.open(bundleUrl)
         }

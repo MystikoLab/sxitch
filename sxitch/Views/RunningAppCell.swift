@@ -1,18 +1,26 @@
 import SwiftUI
 
 struct RunningAppCell: View {
-    let app: RunningApp
+    let app: any SwitchableApp
     let depth: Int
-    let onTap: (RunningApp) -> Void
+    let onTap: (any SwitchableApp) -> Void
 
     @Environment(\.modeTheme) var modeTheme
 
     var body: some View {
         VStack {
             ZStack(alignment: .topTrailing) {
-                Image(nsImage: app.icon)
-                    .resizable()
-                    .frame(width: 60, height: 60)
+                if let symbol = app.symbolName {
+                    Image(systemName: symbol)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 60, height: 60)
+                        .foregroundStyle(modeTheme.foregroundStyle)
+                } else {
+                    Image(nsImage: app.icon)
+                        .resizable()
+                        .frame(width: 60, height: 60)
+                }
 
                 if let nextChar = app.appName.dropFirst(depth).first(where: { !$0.isWhitespace }) {
                     Text(String(nextChar).uppercased())

@@ -2,11 +2,12 @@ import AppKit
 import SwiftUI
 
 struct ContentView: View {
-    @State private var openApps: [RunningApp] = RunningApp.fetchRunningApps()
+    @State private var openApps: [any SwitchableApp] = RunningApp.fetchRunningApps()
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
 
     @Environment(\.openSettings) private var openSettings
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.modeTheme) private var modeTheme
 
     @AppStorage("appBlacklists") var blacklist: [String] = []
     @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"]
@@ -17,6 +18,18 @@ struct ContentView: View {
     @State private var drillDownWindows: [WindowInfo] = []
 
     var appDelegate: AppDelegate
+
+    private var activeMode: CustomMode? {
+        guard let id = appState.activeModeID else { return nil }
+        return CustomModeStore.load().first { $0.id.uuidString == id }
+    }
+
+    private var displayedEntries: [any SwitchableApp] {
+        if appState.activeModeID != nil {
+            return appDelegate.currentEntries()
+        }
+        return openApps
+    }
 
     @ViewBuilder
     private var appLayout: some View {
@@ -32,32 +45,53 @@ struct ContentView: View {
                     onSelect: { appDelegate.closeWindow() }
                 )
                 .environment(\.modeTheme, ModeTheme.theme(for: appState.mode))
-                .id(appState.mode)
+                .id("\(appState.mode.rawValue)-\(appState.activeModeID ?? "default")")
             } else {
-                AnyAppLayout(
-                    apps: openApps,
-                    typed: appState.typed,
-                    onTap: handleAppTap,
-                    layoutStyle: layoutStyle
-                )
+                VStack(spacing: 0) {
+                    if let mode = activeMode, mode.apps.isEmpty {
+                        VStack(spacing: 8) {
+                            Image(systemName: "square.stack.3d.up")
+                                .font(.system(size: 32))
+                                .opacity(0.4)
+                            Text("No apps in this mode")
+                                .font(.headline)
+                                .opacity(0.6)
+                            Text("Add some in Settings → Modes")
+                                .font(.caption)
+                                .opacity(0.4)
+                        }
+                        .frame(minWidth: 280, minHeight: 150)
+                    } else {
+                        AnyAppLayout(
+                            apps: displayedEntries,
+                            typed: appState.typed,
+                            onTap: handleAppTap,
+                            layoutStyle: layoutStyle
+                        )
+                    }
+                }
                 .environment(\.modeTheme, ModeTheme.theme(for: appState.mode))
-                .id(appState.mode)
+                .id("\(appState.mode.rawValue)-\(appState.activeModeID ?? "default")")
             }
         }
     }
 
-    var body: some View {
-        Group {
-            if layoutStyle == "circle" {
-                appLayout
-            } else {
-                appLayout
-                    .modernMacBackground()
-                    .clipShape(RoundedRectangle(cornerRadius: 30))
-            }
+    @ViewBuilder
+    private var switcher: some View {
+        if layoutStyle == "circle" {
+            appLayout
+        } else {
+            appLayout
+                .modernMacBackground()
+                .clipShape(RoundedRectangle(cornerRadius: 30))
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.typed)
-        .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.mode)
+    }
+
+    var body: some View {
+        switcher
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.typed)
+            .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.mode)
+            .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.activeModeID)
             .onReceive(
                 NSWorkspace.shared.notificationCenter.publisher(
                     for: NSWorkspace.didLaunchApplicationNotification
@@ -65,7 +99,7 @@ struct ContentView: View {
             ) { _ in
                 guard appDelegate.window.isVisible else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                    openApps = RunningApp.fetchRunningApps()
+                    reloadEntries()
                 }
             }
             .onReceive(
@@ -75,22 +109,24 @@ struct ContentView: View {
             ) { _ in
                 guard appDelegate.window.isVisible else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                    openApps = RunningApp.fetchRunningApps()
+                    reloadEntries()
                 }
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .switcherWillShow)
             ) { _ in
-                appDelegate.refreshCachedAppNames()
-                openApps = RunningApp.fetchRunningApps()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    appDelegate.resizeWindowToFit()
-                }
+                reloadEntries()
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .openSettingsRequested)
             ) { _ in
                 openSettings()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: .customModesChanged)
+            ) { _ in
+                guard appDelegate.window.isVisible else { return }
+                reloadEntries()
             }
             .onKeyPress(.escape) {
                 if appState.drillDownApp != nil {
@@ -107,16 +143,16 @@ struct ContentView: View {
                 return KeyPress.Result.handled
             }
             .onChange(of: blacklist) { _, _ in
-                openApps = RunningApp.fetchRunningApps()
+                reloadEntries()
                 NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
             }
             .onChange(of: prefixStrip) { _, _ in
-                openApps = RunningApp.fetchRunningApps()
+                reloadEntries()
                 NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
             }
-            .onChange(of: openApps) { _, _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    appDelegate.resizeWindowToFit()
+            .onChange(of: appState.activeModeID) { _, _ in
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                    reloadEntries()
                 }
             }
             .onChange(of: appState.typed) { _, _ in
@@ -144,16 +180,30 @@ struct ContentView: View {
                 if !userState.shared.isPro {
                     await userState.shared.checkCurrentActivationStatus()
                 }
+                NotificationCenter.default.post(name: .customModesChanged, object: nil)
             }
     }
 
-    func handleAppTap(_ app: RunningApp) {
-        let windows = fetchWindowsForApp(app.app)
+    func reloadEntries() {
+        openApps = appDelegate.currentEntries()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            appDelegate.resizeWindowToFit()
+        }
+    }
+
+    func handleAppTap(_ app: any SwitchableApp) {
+        guard let runningApp = app.runningApplication else {
+            let theme = ModeTheme.theme(for: appState.mode)
+            theme.appAction(app)
+            if appState.mode == .normal { appDelegate.closeWindow() }
+            return
+        }
+        let windows = fetchWindowsForApp(runningApp)
         let windowPickerEnabled = UserDefaults.standard.bool(forKey: "windowPickerEnabled")
         let currentMode = appState.mode
 
         if windows.count > 1, userState.shared.isPro, windowPickerEnabled {
-            appState.drillDownApp = app.app
+            appState.drillDownApp = runningApp
         } else if windows.count == 1 {
             let theme = ModeTheme.theme(for: currentMode)
             theme.windowAction(windows[0])

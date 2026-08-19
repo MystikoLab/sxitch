@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct ListAppLayout: View {
-    let apps: [RunningApp]
+    let apps: [any SwitchableApp]
     let typed: String
-    let onTap: (RunningApp) -> Void
+    let onTap: (any SwitchableApp) -> Void
 
     @Environment(\.modeTheme) var modeTheme
 

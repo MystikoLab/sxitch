@@ -12,7 +12,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var allModifiersHeldPreviously: Bool = false
     var heldModifierKeyCodes: Set<Int64> = []
     private var cancellables = Set<AnyCancellable>()
-    var cachedAppNames: [String] = []
+    private var registeredModeHotkeyIDs: Set<String> = []
 
     let keyCodeToChar: [Int64: Character] = [
         0: "a", 11: "b", 8: "c", 2: "d", 14: "e", 3: "f", 5: "g",
@@ -116,6 +116,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.typed = ""
         appState.depth = 0
         appState.mode = .normal
+        appState.activeModeID = nil
         appState.drillDownApp = nil
         window.orderOut(nil)
     }
@@ -127,6 +128,79 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.appState.mode = self.appState.mode == mode ? .normal : mode
             }
         }
+    }
+
+    func registerModeHotkeys() {
+        let modes = CustomModeStore.load()
+        let eligible = proState.isPro
+            ? modes
+            : Array(modes.prefix(CustomModeStore.freeModeLimit))
+        let eligibleIDs = Set(eligible.map { $0.id.uuidString })
+        for stale in registeredModeHotkeyIDs.subtracting(eligibleIDs) {
+            KeyboardShortcuts.removeHandler(for: .customMode(stale))
+        }
+        for mode in eligible {
+            let id = mode.id.uuidString
+            KeyboardShortcuts.removeHandler(for: .customMode(id))
+            KeyboardShortcuts.onKeyDown(for: .customMode(id)) { [weak self] in
+                self?.toggleCustomMode(id)
+            }
+        }
+        registeredModeHotkeyIDs = eligibleIDs
+    }
+
+    private func toggleCustomMode(_ id: String) {
+        guard CustomModeStore.load().contains(where: { $0.id.uuidString == id }) else { return }
+        DispatchQueue.main.async {
+            if self.window.isVisible {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
+                    self.appState.activeModeID = self.appState.activeModeID == id ? nil : id
+                }
+            } else {
+                self.appState.activeModeID = id
+                self.positionWindow()
+                NotificationCenter.default.post(name: .switcherWillShow, object: nil)
+                self.window.orderFrontRegardless()
+            }
+        }
+    }
+
+    func currentEntries() -> [any SwitchableApp] {
+        if let id = appState.activeModeID,
+           let mode = CustomModeStore.load().first(where: { $0.id.uuidString == id }) {
+            return mode.apps.map { PinnedApp(modeApp: $0) }
+        }
+        return RunningApp.fetchRunningApps()
+    }
+
+    func currentAppNames() -> [String] {
+        currentEntries().map { $0.appName.lowercased() }
+    }
+
+    func selectCurrentApp(named: String) {
+        let entries = currentEntries()
+        guard let entry = entries.first(where: { $0.appName.lowercased() == named }) else { return }
+        let theme = ModeTheme.theme(for: appState.mode)
+        let windowPickerEnabled = UserDefaults.standard.bool(forKey: "windowPickerEnabled")
+
+        if let running = entry.runningApplication {
+            let windows = fetchWindowsForApp(running)
+            if windows.count == 1 {
+                theme.windowAction(windows[0])
+                if appState.mode == .normal { closeWindow() }
+            } else if windows.count > 1, proState.isPro, windowPickerEnabled {
+                appState.drillDownApp = running
+            } else {
+                theme.appAction(entry)
+                if appState.mode == .normal { closeWindow() }
+            }
+        } else {
+            theme.appAction(entry)
+            if appState.mode == .normal { closeWindow() }
+        }
+
+        appState.depth = 0
+        appState.typed = ""
     }
 
     var windowPosition: Position {
@@ -245,11 +319,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.window.orderFrontRegardless()
         }
 
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(refreshCachedAppNames),
-            name: .appSettingsChanged, object: nil
-        )
-
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
             selector: #selector(activeAppChanged),
@@ -279,6 +348,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.toggleMode(.normal)
         }
 
+        registerModeHotkeys()
+
+        NotificationCenter.default.addObserver(
+            forName: .customModesChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.registerModeHotkeys()
+        }
+
         window.publisher(for: \.isVisible)
             .removeDuplicates()
             .sink { isVisible in
@@ -293,15 +370,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupEventTap()
         setupAutoSelect()
-        refreshCachedAppNames()
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self, selector: #selector(refreshCachedAppNames),
-            name: NSWorkspace.didLaunchApplicationNotification, object: nil
-        )
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self, selector: #selector(refreshCachedAppNames),
-            name: NSWorkspace.didTerminateApplicationNotification, object: nil
-        )
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
             [weak self] _ in
             guard let self = self else { return }
@@ -332,45 +400,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         }
                     }
                 } else {
-                    let filteredApps = RunningApp.fetchRunningApps().filter {
+                    let filteredApps = self.currentEntries().filter {
                         $0.appName.lowercased().starts(with: typed.lowercased())
                     }
                     if filteredApps.count == 1 {
-                        let singleApp = filteredApps[0]
-                        let theme = ModeTheme.theme(for: self.appState.mode)
-                        let windows = fetchWindowsForApp(singleApp.app)
-                        if windows.count == 1 {
-                            theme.windowAction(windows[0])
-                        } else {
-                            theme.appAction(singleApp)
-                        }
-                        if self.appState.mode == .normal { self.closeWindow() }
-                        self.appState.depth = 0
-                        self.appState.typed = ""
+                        self.selectCurrentApp(named: filteredApps[0].appName.lowercased())
                     }
                 }
             }
             .store(in: &cancellables)
-    }
-
-    @objc func refreshCachedAppNames() {
-        @AppStorage("appBlacklists") var blacklist: [String] = []
-        @AppStorage("prefixStrips") var prefixStrips: [String] = ["microsoft", "adobe"]
-        let usState = userState.shared
-        cachedAppNames = NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular }
-            .map { $0.localizedName ?? "Unknown" }
-            .map { name in
-                var appName = name
-                for prefix in prefixStrips {
-                    if appName.lowercased().hasPrefix(prefix.lowercased()) {
-                        appName = String(appName.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
-                        break
-                    }
-                }
-                return appName.lowercased()
-            }
-            .filter { !blacklist.contains($0) || !usState.isPro }
     }
 
     func setupEventTap() {
@@ -508,25 +546,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 let candidate = appState.typed + pickerChar
                 let candidateLower = candidate.lowercased()
-                let matchingNames = cachedAppNames.filter { app in
+                let matchingNames = currentAppNames().filter { app in
                     app.hasPrefix(candidateLower)
                 }
                 if matchingNames.isEmpty { return nil }
                 if matchingNames.count == 1, appState.drillDownApp == nil {
                     let name = matchingNames[0]
                     DispatchQueue.main.async {
-                        let allApps = RunningApp.fetchRunningApps()
-                        let filtered = allApps.filter { $0.appName.lowercased() == name }
-                        if let app = filtered.first {
-                            let theme = ModeTheme.theme(for: self.appState.mode)
-                            let windows = fetchWindowsForApp(app.app)
-                            if windows.count == 1 {
-                                theme.windowAction(windows[0])
-                            } else {
-                                theme.appAction(app)
-                            }
-                            if self.appState.mode == .normal { self.closeWindow() }
-                        }
+                        self.selectCurrentApp(named: name)
                     }
                     return nil
                 }
