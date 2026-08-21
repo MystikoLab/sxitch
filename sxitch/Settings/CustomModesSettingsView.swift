@@ -261,7 +261,7 @@ struct ModeEditorView: View {
                 ?? bundle.infoDictionary?["CFBundleDisplayName"] as? String
                 ?? bundle.infoDictionary?["CFBundleName"] as? String
             if let name, !name.isEmpty {
-                return name
+                return name.filter("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890".contains)
             }
         }
         return URL(string: bundleURL)?.deletingPathExtension().lastPathComponent ?? "Unknown"
