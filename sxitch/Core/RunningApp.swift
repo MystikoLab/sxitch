@@ -28,7 +28,7 @@ struct RunningApp: SwitchableApp, Equatable {
                 let customIcon = CustomIconStore.shared.load(for: app.bundleIdentifier ?? "")
                 let appName =  (app.localizedName ?? "Unknown")
                 return RunningApp(
-                    appName: appName.filter("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890".contains),
+                    appName: appName.filter("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890 ".contains),
                     app: app,
                     icon: customIcon ?? app.icon ?? NSImage(),
                     bundleUrl: app.bundleURL,
