@@ -36,7 +36,6 @@ struct CustomModesSettingsView: View {
                         }
                         Spacer()
                         KeyboardShortcuts.Recorder(for: .customMode(mode.id.uuidString))
-                            .disabled(atLimit)
                         Button {
                             editingIndex = index
                         } label: {
