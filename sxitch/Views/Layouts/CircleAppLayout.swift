@@ -41,7 +41,6 @@ struct CircleAppLayout: View {
                 let y = radius * CGFloat(sin(angle))
 
                 RunningAppCell(app: app, depth: typed.count, onTap: onTap)
-                    .rotationEffect(.radians(angle + .pi / 2))
                     .offset(x: x, y: y)
             }
         }
