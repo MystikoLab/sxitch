@@ -30,7 +30,7 @@ struct CustomModesSettingsView: View {
                         Text(mode.name)
                             .fontWeight(.medium)
                         if mode.apps.isEmpty {
-                            Text("(no apps)")
+                            Text("(no items)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -70,7 +70,7 @@ struct CustomModesSettingsView: View {
             } header: {
                 Text("Modes")
             } footer: {
-                Text("Each mode shows its pinned apps in the switcher. Assign a hotkey to summon the switcher directly into that mode.")
+                Text("Each mode shows its pinned apps and shell commands in the switcher. Assign a hotkey to summon the switcher directly into that mode.")
             }
         }
         .formStyle(.grouped)
@@ -127,37 +127,63 @@ struct ModeEditorView: View {
                         .disabled(!canRecord)
                 }
             }
-            Section("Apps") {
+            Section("Apps & Commands") {
                 if mode.apps.isEmpty {
-                    Text("No apps yet. Add an app to show in this mode.")
+                    Text("No items yet. Add an app or shell command to show in this mode.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 ForEach($mode.apps) { $app in
-                    HStack(spacing: 8) {
-                        iconButton(for: $app)
-                        TextField("", text: $app.displayName)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            iconButton(for: $app)
+                            TextField("", text: $app.displayName)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(minWidth: 180)
+                            Button {
+                                removeIcon(from: &app)
+                            } label: {
+                                Image(systemName: "xmark.circle")
+                            }
+                            .help("Remove custom icon")
+                            .buttonStyle(.borderless)
+                            Button(role: .destructive) {
+                                mode.apps.removeAll { $0.id == app.id }
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                        if app.isShellCommand {
+                            TextField(
+                                "e.g. brew upgrade sxitch",
+                                text: Binding(
+                                    get: { app.shellCommand ?? "" },
+                                    set: { newValue in
+                                        app.shellCommand = newValue
+                                        if app.displayName.isEmpty
+                                            || app.displayName == "New Command" {
+                                            app.displayName = Self.defaultName(for: newValue)
+                                        }
+                                    }
+                                )
+                            )
                             .textFieldStyle(.roundedBorder)
-                            .frame(minWidth: 180)
-                        Button {
-                            removeIcon(from: &app)
-                        } label: {
-                            Image(systemName: "xmark.circle")
+                            .font(.system(.callout, design: .monospaced))
                         }
-                        .help("Remove custom icon")
-                        .buttonStyle(.borderless)
-                        Button(role: .destructive) {
-                            mode.apps.removeAll { $0.id == app.id }
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.borderless)
                     }
                 }
-                Button {
-                    pickAppBundle()
-                } label: {
-                    Label("Add App", systemImage: "plus")
+                HStack(spacing: 12) {
+                    Button {
+                        pickAppBundle()
+                    } label: {
+                        Label("Add App", systemImage: "plus")
+                    }
+                    Button {
+                        addCommand()
+                    } label: {
+                        Label("Add Command", systemImage: "terminal")
+                    }
                 }
             }
         }
@@ -234,11 +260,13 @@ struct ModeEditorView: View {
                     .resizable()
                     .scaledToFit()
             } else {
-                Image(nsImage: PinnedApp(modeApp: app).icon)
+                Image(nsImage: Self.thumbnailIcon(from: PinnedApp(modeApp: app).icon))
                     .resizable()
+                    .interpolation(.high)
             }
         }
         .frame(width: 28, height: 28)
+        .clipped()
         .padding(4)
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -248,10 +276,47 @@ struct ModeEditorView: View {
         )
     }
 
+    private static func thumbnailIcon(from source: NSImage) -> NSImage {
+        let side: CGFloat = 28
+        return NSImage(size: NSSize(width: side, height: side), flipped: false) { dstRect in
+            let srcSize = source.size
+            guard srcSize.width > 0, srcSize.height > 0 else { return true }
+            let scale = max(dstRect.width / srcSize.width, dstRect.height / srcSize.height)
+            let drawWidth = srcSize.width * scale
+            let drawHeight = srcSize.height * scale
+            let drawRect = NSRect(
+                x: dstRect.midX - drawWidth / 2,
+                y: dstRect.midY - drawHeight / 2,
+                width: drawWidth,
+                height: drawHeight
+            )
+            source.draw(in: drawRect, from: .zero, operation: .copy, fraction: 1.0)
+            return true
+        }
+    }
+
     private func addApp(bundleURL: String) {
         mode.apps.append(
             ModeApp(bundleURL: bundleURL, displayName: displayName(for: bundleURL))
         )
+    }
+
+    private func addCommand() {
+        mode.apps.append(
+            ModeApp(
+                bundleURL: "",
+                displayName: "New Command",
+                icon: .system("terminal"),
+                shellCommand: ""
+            )
+        )
+    }
+
+    private static func defaultName(for command: String) -> String {
+        let token = command
+            .split(separator: " ", omittingEmptySubsequences: true)
+            .first.map(String.init) ?? ""
+        return token.isEmpty ? "New Command" : token
     }
 
     private func displayName(for bundleURL: String) -> String {
