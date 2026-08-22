@@ -27,6 +27,9 @@ Sxitch is a native macos app switcher that uses the apps name to pick the app (a
 - "Dock" mode (launch apps + apps kept in the dock)
 - Optional "enter" mode (require confirmation before switching)
 - Per app key. Each app will have their own keypress
+- Press and hold Hotkey option (config option)
+- Don't auto close Sxitch after a new app opens (config option)
+- Multi Open while holding Shift 
 
 ## Sxitch Pricing:
 - $2/mth (after 6 consecutive months I'll send u a discount code for 100% off sxitch, the goal of the subscripion is to let you try the pro version)
