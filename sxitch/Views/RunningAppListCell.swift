@@ -19,7 +19,9 @@ struct RunningAppListCell: View {
                 } else {
                     Image(nsImage: app.icon)
                         .resizable()
+                        .scaledToFill()
                         .frame(width: 36, height: 36)
+                        .clipped()
                 }
 
                 if let nextChar = app.appName.dropFirst(depth).first(where: { !$0.isWhitespace }) {

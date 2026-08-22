@@ -9,8 +9,14 @@ struct PinnedApp: SwitchableApp {
     var appName: String { modeApp.displayName }
 
     var symbolName: String? {
-        if case .system(let name) = modeApp.icon { return name }
-        return nil
+        switch modeApp.icon {
+        case .system(let name):
+            return name
+        case .image:
+            return nil
+        case nil:
+            return modeApp.isShellCommand ? "terminal" : nil
+        }
     }
 
     var icon: NSImage {
@@ -36,6 +42,11 @@ struct PinnedApp: SwitchableApp {
     }
 
     func activate() {
+        if let command = modeApp.shellCommand?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !command.isEmpty {
+            ShellCommandRunner.run(command)
+            return
+        }
         guard let url = URL(string: modeApp.bundleURL) else { return }
         NSWorkspace.shared.open(url)
     }

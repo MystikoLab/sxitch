@@ -56,7 +56,7 @@ struct ContentView: View {
                             Text("No apps in this mode")
                                 .font(.headline)
                                 .opacity(0.6)
-                            Text("Add some in Settings → Modes")
+                            Text("Add apps or commands in Settings → Modes")
                                 .font(.caption)
                                 .opacity(0.4)
                         }

@@ -10,6 +10,9 @@ struct ModeApp: Codable, Equatable, Identifiable {
     var bundleURL: String
     var displayName: String
     var icon: ModeAppIcon?
+    var shellCommand: String? = nil
+
+    var isShellCommand: Bool { shellCommand != nil }
 }
 
 struct CustomMode: Codable, Equatable, Identifiable {
