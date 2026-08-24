@@ -14,13 +14,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
     private var registeredModeHotkeyIDs: Set<String> = []
 
-    let keyCodeToChar: [Int64: Character] = [
-        0: "a", 11: "b", 8: "c", 2: "d", 14: "e", 3: "f", 5: "g",
-        4: "h", 34: "i", 38: "j", 40: "k", 37: "l", 46: "m", 45: "n",
-        31: "o", 35: "p", 12: "q", 15: "r", 1: "s", 17: "t", 32: "u",
-        9: "v", 13: "w", 7: "x", 16: "y", 6: "z",
-    ]
-
     var proState = userState.shared
 
     let flagForKeyCode: [Int64: CGEventFlags] = [
@@ -461,6 +454,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("Event tap created successfully")
     }
 
+    private func typedCharacter(from event: CGEvent) -> String? {
+        var chars = [UniChar](repeating: 0, count: 4)
+        var length = 0
+        event.keyboardGetUnicodeString(
+            maxStringLength: chars.count,
+            actualStringLength: &length,
+            unicodeString: &chars
+        )
+        guard length > 0 else { return nil }
+        let s = String(utf16CodeUnits: chars, count: length)
+        guard s.count == 1, let c = s.first, c.isLetter || c.isNumber else { return nil }
+        return String(c).lowercased()
+    }
+
     func handleEvent(proxy _: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<
         CGEvent
     >? {
@@ -535,7 +542,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if window.isVisible, flags == CGEventFlags(rawValue: 256) {
-            if let letter = keyCodeToChar[keyCode] {
+            if let letter = typedCharacter(from: event) {
                 let raw = String(letter)
                 let pickerChar: String
                 if self.proState.isPro {
