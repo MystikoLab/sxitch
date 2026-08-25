@@ -16,14 +16,14 @@ Sxitch is a native macos app switcher that uses the apps name to pick the app (a
 - Key Overrides (Pro)
 - App based hotkey (Pro)
 - Customisable window position
-
-## Roadmap:
 - Customsiable modes
   - Launch apps (added)
   - Call shell commands
   - Customise icons (added)
-  - Integrate with WMs
-  - Can be modified from URL Scheme
+
+## Roadmap:
+- Autoupdate using sparkle
+- Add / remove elements from custom modes using deeplinks
 - "Dock" mode (launch apps + apps kept in the dock)
 - Optional "enter" mode (require confirmation before switching)
 - Per app key. Each app will have their own keypress
@@ -32,11 +32,11 @@ Sxitch is a native macos app switcher that uses the apps name to pick the app (a
 - Multi Open while holding Shift 
 
 ## Sxitch Pricing:
-- $2/mth (after 6 consecutive months I'll send u a discount code for 100% off sxitch, the goal of the subscripion is to let you try the pro version)
+- $2/mth (after 5 consecutive months I'll send u a discount code for 100% off sxitch, the goal of the subscripion is to let you try the pro version)
 - $10 (One time payment)
 - Free plan (But missing features)
 
-[Get Sxitch Pro](https://sxitch.app#pricing)
+[Get Sxitch Pro](https://sxitch.app#download)
 
 > If you are a contributor, once you hit 3 PRs with a reasonable bug fix / feature added (to Sxitch), you can get Sxitch for free.
 
