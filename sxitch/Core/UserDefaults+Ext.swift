@@ -17,4 +17,9 @@ extension UserDefaults {
         get { (dictionary(forKey: "icon_mapping") as? [String: String]) ?? [:] }
         set { set(newValue, forKey: "icon_mapping") }
     }
+
+    var appRenames: [String: String] {
+        get { (dictionary(forKey: "app_renames") as? [String: String]) ?? [:] }
+        set { set(newValue, forKey: "app_renames") }
+    }
 }

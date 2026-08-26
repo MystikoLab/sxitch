@@ -33,4 +33,5 @@ extension Notification.Name {
     static let openSettingsRequested = Notification.Name("sxitch.openSettingsRequested")
     static let appSettingsChanged = Notification.Name("appSettingsChanged")
     static let customModesChanged = Notification.Name("sxitch.customModesChanged")
+    static let appRenamesChanged = Notification.Name("sxitch.appRenamesChanged")
 }

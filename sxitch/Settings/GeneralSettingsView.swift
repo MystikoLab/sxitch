@@ -2,6 +2,7 @@ import Combine
 import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
+import CoreGraphics
 
 struct GeneralSettingsView: View, SettingsTab {
     static let tabID = "general"
@@ -15,6 +16,7 @@ struct GeneralSettingsView: View, SettingsTab {
     @Environment(\.openWindow) private var openWindow
     private var usState = userState.shared
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
+    @State private var screenRecordingGranted: Bool = CGPreflightScreenCaptureAccess()
     @State private var isLaunchAtLoginEnabled: Bool = SMAppService.mainApp.status == .enabled
 
     @AppStorage("hotkey_modifier_config") private var modifierConfig: String = "1:right"
@@ -23,6 +25,10 @@ struct GeneralSettingsView: View, SettingsTab {
     @State private var overrides: [String: String] = UserDefaults.standard.keyOverrides
     @State private var newOverrideOriginal: String = ""
     @State private var newOverrideTo: String = ""
+
+    @State private var appRenames: [String: String] = UserDefaults.standard.appRenames
+    @State private var newAppRename: String = ""
+    @State private var newAppRenameTo: String = ""
 
     private func stateFor(family: Int, side: String) -> Int {
         for entry in modifierConfig.split(separator: ",") {
@@ -138,6 +144,26 @@ struct GeneralSettingsView: View, SettingsTab {
                     accessibilityGranted = AXIsProcessTrusted()
                     if !wasGranted && accessibilityGranted {
                         (NSApp.delegate as? AppDelegate)?.setupEventTap()
+                    }
+                }
+                HStack {
+                    Image(
+                        systemName: screenRecordingGranted
+                            ? "checkmark.circle.fill" : "xmark.circle.fill"
+                    )
+                    .foregroundStyle(screenRecordingGranted ? .green : .red)
+                    Text(
+                        screenRecordingGranted ? "Screen recording permissions granted" : "Screen recording permissions not granted"
+                    )
+                    Spacer()
+                    if !screenRecordingGranted {
+                        Button("Request") {
+                            let granted = CGRequestScreenCaptureAccess()
+                            if !granted {
+                                let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
                     }
                 }
             }
@@ -291,6 +317,64 @@ struct GeneralSettingsView: View, SettingsTab {
                     }
                 }
             }
+            Section("App name override") {
+                if !usState.isPro {
+                    HStack {
+                        Label("Pro", systemImage: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
+                Text("Override the apps name, Allowing you to change what keypresses will trigger the app")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    TextField("Old name", text: $newAppRename)
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(!usState.isPro)
+                    TextField("New name", text: $newAppRenameTo)
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(!usState.isPro)
+                    Button("Add", systemImage: "plus") { addAppRename() }
+                        .disabled(!usState.isPro || newAppRename.trimmingCharacters(in: .whitespaces).isEmpty || newAppRenameTo.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+
+                if appRenames.isEmpty {
+                    Text("No app renames configured yet.")
+                        .foregroundStyle(.secondary)
+                        .font(.callout)
+                        .italic()
+                        .frame(maxWidth: .infinity, minHeight: 60, alignment: .center)
+                } else {
+                    ForEach(Array(appRenames.keys.sorted()), id: \.self) { original in
+                        HStack {
+                            Text(original)
+
+                            Image(systemName: "arrow.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text(appRenames[original]!)
+                                .font(.system(size: 13, weight: .semibold))
+
+                            Spacer()
+
+                            Button(role: .destructive) {
+                                appRenames.removeValue(forKey: original)
+                                saveAppRenames()
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(!usState.isPro)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
+
 
             Section {
                 Toggle("Launch at login", isOn: $isLaunchAtLoginEnabled)
@@ -390,7 +474,21 @@ struct GeneralSettingsView: View, SettingsTab {
         newOverrideTo = ""
     }
 
+    private func addAppRename() {
+        let original = newAppRename.trimmingCharacters(in: .whitespaces).lowercased()
+        let appRename = newAppRenameTo.trimmingCharacters(in: .whitespaces)
+        guard !appRename.isEmpty, original != appRename else { return }
+        appRenames[original] = appRename
+        saveAppRenames()
+        newAppRename = ""
+        newAppRenameTo = ""
+    }
+
     private func saveOverrides() {
         UserDefaults.standard.keyOverrides = overrides
+    }
+    private func saveAppRenames() {
+        UserDefaults.standard.appRenames = appRenames
+        NotificationCenter.default.post(name: .appRenamesChanged, object: nil)
     }
 }
