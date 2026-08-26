@@ -23,12 +23,14 @@ struct RunningApp: SwitchableApp, Equatable {
         let usState = userState.shared
         @AppStorage("appBlacklists") var blacklist: [String] = []
         @AppStorage("prefixStrips") var prefixStrips: [String] = ["microsoft", "adobe"]
+        let appRenames = UserDefaults.standard.appRenames
         return NSWorkspace.shared.runningApplications
             .map { app in
                 let customIcon = CustomIconStore.shared.load(for: app.bundleIdentifier ?? "")
-                let appName =  (app.localizedName ?? "Unknown")
+                let appName = (app.localizedName ?? "Unknown").filter("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890 ".contains)
+                let finalisedName = appRenames[appName.lowercased()] ?? appName
                 return RunningApp(
-                    appName: appName.filter("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890 ".contains),
+                    appName: finalisedName,
                     app: app,
                     icon: customIcon ?? app.icon ?? NSImage(),
                     bundleUrl: app.bundleURL,
