@@ -553,11 +553,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 let candidate = appState.typed + pickerChar
                 let candidateLower = candidate.lowercased()
+
+                if let drillApp = appState.drillDownApp {
+                    // Window-picking mode: match against window titles for this app
+                    let allWindows = fetchWindowsForApp(drillApp)
+                    let matchingWindows = allWindows.filter {
+                        $0.title.lowercased().hasPrefix(candidateLower)
+                    }
+                    if matchingWindows.isEmpty { return nil }
+                    if matchingWindows.count == 1 {
+                        let theme = ModeTheme.theme(for: self.appState.mode)
+                        DispatchQueue.main.async {
+                            theme.windowAction(matchingWindows[0])
+                            self.appState.depth = 0
+                            self.appState.typed = ""
+                            if self.appState.mode == .normal {
+                                self.closeWindow()
+                            }
+                        }
+                        return nil
+                    }
+                    DispatchQueue.main.async {
+                        self.appState.typed = candidate
+                        self.appState.depth += pickerChar.count
+                    }
+                    return nil
+                }
+
+                // App-picking mode: match against app names (unchanged)
                 let matchingNames = currentAppNames().filter { app in
                     app.hasPrefix(candidateLower)
                 }
                 if matchingNames.isEmpty { return nil }
-                if matchingNames.count == 1, appState.drillDownApp == nil {
+                if matchingNames.count == 1 {
                     let name = matchingNames[0]
                     DispatchQueue.main.async {
                         self.selectCurrentApp(named: name)
