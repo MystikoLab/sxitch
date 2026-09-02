@@ -71,7 +71,6 @@ struct sxitchApp: App {
         Settings {
             SettingsView()
         }
-        .windowStyle(.hiddenTitleBar)
 
         Window("Welcome to Sxitch", id: "onboarding") {
             OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)

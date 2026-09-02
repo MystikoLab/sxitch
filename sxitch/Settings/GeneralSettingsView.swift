@@ -196,13 +196,15 @@ struct GeneralSettingsView: View, SettingsTab {
                     }
                 }
 
-                Picker("Key", selection: $keycode) {
-                    Text("None").tag(256)
-                    Text("Space").tag(49)
-                    Text("Tab").tag(48)
-                    Text("Return").tag(36)
-                }
-                .pickerStyle(.segmented)
+                SlidingSegmentedPicker(
+                    selection: $keycode,
+                    options: [
+                        ("None", 256),
+                        ("Space", 49),
+                        ("Tab", 48),
+                        ("Return", 36)
+                    ]
+                )
             }
             Section("Mode Hotkeys") {
                 HStack {
@@ -490,5 +492,66 @@ struct GeneralSettingsView: View, SettingsTab {
     private func saveAppRenames() {
         UserDefaults.standard.appRenames = appRenames
         NotificationCenter.default.post(name: .appRenamesChanged, object: nil)
+    }
+}
+
+struct SlidingSegmentedPicker: View {
+    @Binding var selection: Int
+    let options: [(label: String, value: Int)]
+
+    @State private var segmentFrames: [Int: CGRect] = [:]
+
+    private struct FramePreferenceKey: PreferenceKey {
+        static var defaultValue: [Int: CGRect] = [:]
+        static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+            value.merge(nextValue()) { $1 }
+        }
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            // Sliding highlight
+            if let frame = segmentFrames[selection] {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.accentColor)
+                    .frame(width: frame.width, height: frame.height)
+                    .offset(x: frame.minX, y: 0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selection)
+            }
+
+            HStack(spacing: 0) {
+                ForEach(options, id: \.value) { option in
+                    Text(option.label)
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .foregroundColor(selection == option.value ? .white : .primary)
+                        .contentShape(Rectangle())
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear
+                                    .preference(key: FramePreferenceKey.self,
+                                                value: [option.value: geo.frame(in: .named("picker"))])
+                            }
+                        )
+                        .onTapGesture {
+                            selection = option.value
+                        }
+                }
+            }
+        }
+        .coordinateSpace(name: "picker")
+        .onPreferenceChange(FramePreferenceKey.self) { frames in
+            segmentFrames = frames
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
+        )
     }
 }

@@ -82,6 +82,56 @@ struct ActivateSettingsView: View, SettingsTab {
                             || isActivating
                     )
                 }
+                Section(
+                    header: Text("Get Sxitch Pro"),
+                    footer: Text("You'll receive a license key by email after purchase — activate it below.")
+                ) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach([
+                            "3 Macs · macOS 15+",
+                            "Hide / Quit mode",
+                            "Overrides and blacklists",
+                            "Unlimited modes",
+                            "Window picking",
+                            "Priority Support (via Discord)",
+                            "All future updates included",
+                            "No account required"
+                        ], id: \.self) { feature in
+                            Label(feature, systemImage: "checkmark")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    HStack(spacing: 12) {
+                        Button(action: { openCheckout(.oneTime) }) {
+                            VStack(spacing: 2) {
+                                Text("Buy Once")
+                                    .font(.headline)
+                                Text("$10 · lifetime")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button(action: { openCheckout(.subscription) }) {
+                            VStack(spacing: 2) {
+                                Text("Subscribe")
+                                    .font(.headline)
+                                Text("$2 / month")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.vertical, 4)
+                }
             }
         }
         .padding()
@@ -124,4 +174,22 @@ struct ActivateSettingsView: View, SettingsTab {
             print("Failed to remove credentials from Keychain: \(error)")
         }
     }
+}
+
+private enum PurchasePlan {
+    case oneTime
+    case subscription
+
+    var checkoutURL: URL {
+        switch self {
+        case .oneTime:
+            return URL(string: "https://buy.polar.sh/polar_cl_KHE76N1u71k4CQZMxjSlJDS9Ylh1gOI2p89z74ZxJ5c")!
+        case .subscription:
+            return URL(string: "https://buy.polar.sh/polar_cl_MhcxcWQljznmm2jcMhSp9XMevDqLz7zQfn9mD11VGTg")!
+        }
+    }
+}
+
+private func openCheckout(_ plan: PurchasePlan) {
+    NSWorkspace.shared.open(plan.checkoutURL)
 }

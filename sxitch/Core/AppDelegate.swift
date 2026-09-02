@@ -115,7 +115,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func toggleMode(_ mode: AppMode) {
-        guard window.isVisible, proState.isPro else { return }
+        guard window.isVisible, proState.isPro else {
+            closeWindow()
+            let alert = NSAlert()
+            alert.messageText = "Hide and Quit modes are disabled"
+            alert.informativeText = "This feature is only available in Sxitch Pro"
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "Get Sxitch Pro")
+            alert.addButton(withTitle: "Cancel")
+            let response = alert.runModal()
+
+            if response == .alertFirstButtonReturn {
+                if let sxitchUrl = URL(string: "https://sxitch.app/#download") {
+                    NSWorkspace.shared.open(sxitchUrl)
+                }
+            }
+
+            return
+        }
         DispatchQueue.main.async {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
                 self.appState.mode = self.appState.mode == mode ? .normal : mode
