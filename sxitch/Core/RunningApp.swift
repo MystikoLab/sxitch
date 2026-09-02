@@ -6,7 +6,9 @@ struct RunningApp: SwitchableApp, Equatable {
         lhs.id == rhs.id && lhs.depth == rhs.depth
     }
 
-    var id: String { "\(app.processIdentifier)" }
+    var id: String {
+        "\(app.processIdentifier)"
+    }
 
     var appName: String
     var app: NSRunningApplication
@@ -17,7 +19,9 @@ struct RunningApp: SwitchableApp, Equatable {
     var symbolName: String? = nil
     var overrideTap: ((any SwitchableApp) -> Void)? = nil
 
-    var runningApplication: NSRunningApplication? { app }
+    var runningApplication: NSRunningApplication? {
+        app
+    }
 
     static func fetchRunningApps() -> [RunningApp] {
         let usState = userState.shared
@@ -34,7 +38,7 @@ struct RunningApp: SwitchableApp, Equatable {
                     app: app,
                     icon: customIcon ?? app.icon ?? NSImage(),
                     bundleUrl: app.bundleURL,
-                    bundleID: app.bundleIdentifier ?? "",
+                    bundleID: app.bundleIdentifier ?? ""
                 )
             }
             .map { app in
@@ -63,7 +67,9 @@ struct RunningApp: SwitchableApp, Equatable {
         }
     }
 
-    func hideApp() { app.hide() }
+    func hideApp() {
+        app.hide()
+    }
 
     func quitApp() {
         print("Terminating: \(appName)")

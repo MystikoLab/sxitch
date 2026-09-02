@@ -20,7 +20,7 @@ struct CircleAppLayout: View {
         let radius = max(minRadius, 50)
 
         ZStack {
-            ForEach(Array(filtered.enumerated()), id: \.element.id) { index, app in
+            ForEach(Array(filtered.enumerated()), id: \.element.id) { index, _ in
                 let t = Double(index) / Double(segments)
                 let angle = startAngle + t * totalAngle
                 let halfSpan = spacing / 2

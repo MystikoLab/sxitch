@@ -177,7 +177,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func currentEntries() -> [any SwitchableApp] {
         if let id = appState.activeModeID,
-           let mode = CustomModeStore.load().first(where: { $0.id.uuidString == id }) {
+           let mode = CustomModeStore.load().first(where: { $0.id.uuidString == id })
+        {
             return mode.apps.map { PinnedApp(modeApp: $0) }
         }
         return RunningApp.fetchRunningApps()
@@ -197,16 +198,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let windows = fetchWindowsForApp(running)
             if windows.count == 1 {
                 theme.windowAction(windows[0])
-                if appState.mode == .normal { closeWindow() }
+                if appState.mode == .normal {
+                    closeWindow()
+                }
             } else if windows.count > 1, proState.isPro, windowPickerEnabled {
                 appState.drillDownApp = running
             } else {
                 theme.appAction(entry)
-                if appState.mode == .normal { closeWindow() }
+                if appState.mode == .normal {
+                    closeWindow()
+                }
             }
         } else {
             theme.appAction(entry)
-            if appState.mode == .normal { closeWindow() }
+            if appState.mode == .normal {
+                closeWindow()
+            }
         }
 
         appState.depth = 0
@@ -237,8 +244,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func positionWindow() {
         if windowPosition == .default {
             window.center()
-        }
-        else if windowPosition == .mousePos {
+        } else if windowPosition == .mousePos {
             let mouseLocation = NSEvent.mouseLocation
             let screen = screenWithMouse()
             let size = window.frame.size
@@ -265,7 +271,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func resizeWindowToFit() {
         guard window.isVisible else { return }
         guard let hostingView = window.contentView else { return }
-        hostingView.layoutSubtreeIfNeeded();
+        hostingView.layoutSubtreeIfNeeded()
         let newSize = hostingView.fittingSize
         guard newSize.width > 0, newSize.height > 0 else { return }
         let currentFrame = window.frame
@@ -291,7 +297,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         (window as! NSPanel).isFloatingPanel = true
         window.isOpaque = false
-        self.resizeWindowToFit()
+        resizeWindowToFit()
         window.backgroundColor = .clear
         window.level = NSWindow.Level(NSWindow.Level.floating.rawValue + 200)
         window.isMovableByWindowBackground = true
@@ -313,8 +319,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
             window.makeKeyAndOrderFront(nil)
-            self.appState.depth = 0
-            self.appState.typed = ""
+            appState.depth = 0
+            appState.typed = ""
         }
 
         NotificationCenter.default.addObserver(
@@ -376,7 +382,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             .store(in: &cancellables)
-
 
         setupEventTap()
         setupAutoSelect()
@@ -541,7 +546,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if savedKeycode == 256, type == .flagsChanged {
             let config = parseModifierConfig()
             let allHeld = modifiersSatisfied(config: config)
-            if allHeld && !allModifiersHeldPreviously {
+            if allHeld, !allModifiersHeldPreviously {
                 allModifiersHeldPreviously = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     if self.window.isVisible {
@@ -562,7 +567,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let letter = typedCharacter(from: event) {
                 let raw = String(letter)
                 let pickerChar: String
-                if self.proState.isPro {
+                if proState.isPro {
                     let overrides = UserDefaults.standard.keyOverrides
                     pickerChar = overrides[raw] ?? raw
                 } else {
@@ -577,9 +582,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     let matchingWindows = allWindows.filter {
                         $0.title.lowercased().hasPrefix(candidateLower)
                     }
-                    if matchingWindows.isEmpty { return nil }
+                    if matchingWindows.isEmpty {
+                        return nil
+                    }
                     if matchingWindows.count == 1 {
-                        let theme = ModeTheme.theme(for: self.appState.mode)
+                        let theme = ModeTheme.theme(for: appState.mode)
                         DispatchQueue.main.async {
                             theme.windowAction(matchingWindows[0])
                             self.appState.depth = 0
@@ -601,7 +608,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let matchingNames = currentAppNames().filter { app in
                     app.hasPrefix(candidateLower)
                 }
-                if matchingNames.isEmpty { return nil }
+                if matchingNames.isEmpty {
+                    return nil
+                }
                 if matchingNames.count == 1 {
                     let name = matchingNames[0]
                     DispatchQueue.main.async {

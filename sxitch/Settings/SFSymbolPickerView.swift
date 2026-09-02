@@ -30,12 +30,14 @@ struct SFSymbolPickerView: View {
     ]
 
     private var filtered: [String] {
-        if search.isEmpty { return Self.curated }
+        if search.isEmpty {
+            return Self.curated
+        }
         return Self.curated.filter { $0.localizedCaseInsensitiveContains(search) }
     }
 
     private let columns = [
-        GridItem(.adaptive(minimum: 64, maximum: 72), spacing: 8)
+        GridItem(.adaptive(minimum: 64, maximum: 72), spacing: 8),
     ]
 
     var body: some View {

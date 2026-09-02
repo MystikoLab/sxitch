@@ -1,6 +1,6 @@
 import AppKit
-import KeyboardShortcuts
 import Foundation
+import KeyboardShortcuts
 
 extension KeyboardShortcuts.Name {
     static let hideMode = Self(

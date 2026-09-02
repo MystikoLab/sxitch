@@ -95,7 +95,7 @@ struct ActivateSettingsView: View, SettingsTab {
                             "Window picking",
                             "Priority Support (via Discord)",
                             "All future updates included",
-                            "No account required"
+                            "No account required",
                         ], id: \.self) { feature in
                             Label(feature, systemImage: "checkmark")
                                 .font(.subheadline)

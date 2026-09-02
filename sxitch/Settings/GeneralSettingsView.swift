@@ -1,8 +1,8 @@
 import Combine
+import CoreGraphics
 import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
-import CoreGraphics
 
 struct GeneralSettingsView: View, SettingsTab {
     static let tabID = "general"
@@ -35,8 +35,12 @@ struct GeneralSettingsView: View, SettingsTab {
             let parts = entry.split(separator: ":")
             guard parts.count == 2, let f = Int(parts[0]), f == family else { continue }
             let s = String(parts[1])
-            if s == side { return 1 }
-            if s == "either" { return 2 }
+            if s == side {
+                return 1
+            }
+            if s == "either" {
+                return 2
+            }
         }
         return 0
     }
@@ -202,7 +206,7 @@ struct GeneralSettingsView: View, SettingsTab {
                         ("None", 256),
                         ("Space", 49),
                         ("Tab", 48),
-                        ("Return", 36)
+                        ("Return", 36),
                     ]
                 )
             }
@@ -377,7 +381,6 @@ struct GeneralSettingsView: View, SettingsTab {
                 }
             }
 
-
             Section {
                 Toggle("Launch at login", isOn: $isLaunchAtLoginEnabled)
                     .onChange(of: isLaunchAtLoginEnabled) { oldValue, newValue in
@@ -398,7 +401,7 @@ struct GeneralSettingsView: View, SettingsTab {
 
             Section {
                 Toggle("Show picker UI", isOn: $showUi)
-                    .onChange(of: showUi) { oldValue, newValue in
+                    .onChange(of: showUi) { _, newValue in
                         showUi = newValue
                     }
             }
@@ -489,6 +492,7 @@ struct GeneralSettingsView: View, SettingsTab {
     private func saveOverrides() {
         UserDefaults.standard.keyOverrides = overrides
     }
+
     private func saveAppRenames() {
         UserDefaults.standard.appRenames = appRenames
         NotificationCenter.default.post(name: .appRenamesChanged, object: nil)

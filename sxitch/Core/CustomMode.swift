@@ -12,7 +12,9 @@ struct ModeApp: Codable, Equatable, Identifiable {
     var icon: ModeAppIcon?
     var shellCommand: String? = nil
 
-    var isShellCommand: Bool { shellCommand != nil }
+    var isShellCommand: Bool {
+        shellCommand != nil
+    }
 }
 
 struct CustomMode: Codable, Equatable, Identifiable {

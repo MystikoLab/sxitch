@@ -1,5 +1,5 @@
-import ApplicationServices
 import AppKit
+import ApplicationServices
 
 struct WindowInfo: Identifiable {
     let id: Int

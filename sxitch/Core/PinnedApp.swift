@@ -5,12 +5,17 @@ struct PinnedApp: SwitchableApp {
     var depth: Int = 0
     var overrideTap: ((any SwitchableApp) -> Void)? = nil
 
-    var id: String { "pinned-\(modeApp.id.uuidString)" }
-    var appName: String { modeApp.displayName }
+    var id: String {
+        "pinned-\(modeApp.id.uuidString)"
+    }
+
+    var appName: String {
+        modeApp.displayName
+    }
 
     var symbolName: String? {
         switch modeApp.icon {
-        case .system(let name):
+        case let .system(name):
             return name
         case .image:
             return nil
@@ -21,13 +26,14 @@ struct PinnedApp: SwitchableApp {
 
     var icon: NSImage {
         switch modeApp.icon {
-        case .image(let file):
+        case let .image(file):
             return ModeIconStore.shared.image(named: file) ?? NSImage()
         case .system:
             return NSImage()
         case nil:
             if let url = URL(string: modeApp.bundleURL),
-               FileManager.default.fileExists(atPath: url.path) {
+               FileManager.default.fileExists(atPath: url.path)
+            {
                 return NSWorkspace.shared.icon(forFile: url.path)
             }
             return NSImage(systemSymbolName: "app", accessibilityDescription: nil) ?? NSImage()
@@ -43,7 +49,8 @@ struct PinnedApp: SwitchableApp {
 
     func activate() {
         if let command = modeApp.shellCommand?
-            .trimmingCharacters(in: .whitespacesAndNewlines), !command.isEmpty {
+            .trimmingCharacters(in: .whitespacesAndNewlines), !command.isEmpty
+        {
             ShellCommandRunner.run(command)
             return
         }

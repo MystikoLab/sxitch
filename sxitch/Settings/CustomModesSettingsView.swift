@@ -81,7 +81,11 @@ struct CustomModesSettingsView: View {
         .sheet(
             isPresented: Binding(
                 get: { editingIndex != nil },
-                set: { if !$0 { editingIndex = nil } }
+                set: {
+                    if !$0 {
+                        editingIndex = nil
+                    }
+                }
             )
         ) {
             if let idx = editingIndex {
@@ -162,7 +166,8 @@ struct ModeEditorView: View {
                                     set: { newValue in
                                         app.shellCommand = newValue
                                         if app.displayName.isEmpty
-                                            || app.displayName == "New Command" {
+                                            || app.displayName == "New Command"
+                                        {
                                             app.displayName = Self.defaultName(for: newValue)
                                         }
                                     }
@@ -223,7 +228,6 @@ struct ModeEditorView: View {
         }
     }
 
-    @ViewBuilder
     private func iconButton(for app: Binding<ModeApp>) -> some View {
         Menu {
             Button("Choose Image File…") {
@@ -252,7 +256,6 @@ struct ModeEditorView: View {
         }
     }
 
-    @ViewBuilder
     private func iconThumbnail(for app: ModeApp) -> some View {
         Group {
             if let symbol = PinnedApp(modeApp: app).symbolName {
@@ -345,14 +348,14 @@ struct ModeEditorView: View {
     }
 
     private func removeIcon(from app: inout ModeApp) {
-        if case .image(let file) = app.icon {
+        if case let .image(file) = app.icon {
             ModeIconStore.shared.delete(named: file)
         }
         app.icon = nil
     }
 
     private static func pngData(from url: URL) -> Data? {
-        if let data = try? Data(contentsOf: url), Self.isPNG(data) {
+        if let data = try? Data(contentsOf: url), isPNG(data) {
             return data
         }
         guard let image = NSImage(contentsOf: url),

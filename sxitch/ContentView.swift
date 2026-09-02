@@ -34,7 +34,6 @@ struct ContentView: View {
     @ViewBuilder
     private var appLayout: some View {
         if !showUi {
-
         } else {
             if let drillApp = appState.drillDownApp {
                 WindowPickerView(
@@ -195,7 +194,9 @@ struct ContentView: View {
         guard let runningApp = app.runningApplication else {
             let theme = ModeTheme.theme(for: appState.mode)
             theme.appAction(app)
-            if appState.mode == .normal { appDelegate.closeWindow() }
+            if appState.mode == .normal {
+                appDelegate.closeWindow()
+            }
             return
         }
         let windows = fetchWindowsForApp(runningApp)
@@ -211,7 +212,9 @@ struct ContentView: View {
         } else {
             let theme = ModeTheme.theme(for: currentMode)
             theme.appAction(app)
-            if currentMode == .normal { appDelegate.closeWindow() }
+            if currentMode == .normal {
+                appDelegate.closeWindow()
+            }
         }
     }
 }

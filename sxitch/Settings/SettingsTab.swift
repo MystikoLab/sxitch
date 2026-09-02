@@ -13,7 +13,7 @@ struct AnySettingsTab: Identifiable {
     let content: AnyView
 }
 
-struct RegisteredTabs {
+enum RegisteredTabs {
     static var all: [AnySettingsTab] = [
         AnySettingsTab(id: "general", title: "General", icon: "gear", content: AnyView(GeneralSettingsView())),
         AnySettingsTab(id: "theme", title: "Theme", icon: "paintpalette.fill", content: AnyView(ThemeSettingsView())),

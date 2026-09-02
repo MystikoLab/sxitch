@@ -42,10 +42,10 @@ struct AppHotkeySettingsView: View {
                 allowsMultipleSelection: false
             ) { result in
                 switch result {
-                case .success(let urls):
+                case let .success(urls):
                     guard let url = urls.first else { return }
                     addApp(bundleURL: url.absoluteString)
-                case .failure(let error):
+                case let .failure(error):
                     print("Error: \(error)")
                 }
             }
