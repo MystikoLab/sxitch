@@ -14,6 +14,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
     private var registeredModeHotkeyIDs: Set<String> = []
 
+    // Snapshots read by the event-tap callback. The tap runs on its own thread under a
+    // hard timeout: enumerating NSWorkspace (which builds an icon per running app) or
+    // walking the AX API of another process can easily overrun it, and macOS responds by
+    // disabling the tap. These are refreshed on the main thread whenever the switcher is
+    // shown or its contents change, so the callback only ever reads memory.
+    private let cacheLock = NSLock()
+    private var cachedAppNames: [String] = []
+    private var cachedDrillWindows: [WindowInfo] = []
+
     var proState = userState.shared
 
     let flagForKeyCode: [Int64: CGEventFlags] = [
@@ -96,7 +105,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Seeds the defaults the event tap reads directly.
+    ///
+    /// `@AppStorage("hotkey_keycode")` in the settings view only supplies a fallback to
+    /// SwiftUI — it writes nothing until the user changes the picker. Without this,
+    /// `UserDefaults.standard.integer(forKey:)` in `handleEvent` returns 0 on a fresh
+    /// install, which is the keycode for "A", so the configured hotkey never matches.
+    ///
+    /// 256 is the sentinel for "no key, modifier only", i.e. the documented default of
+    /// tapping Right ⌘ on its own.
+    ///
+    /// `hotkey_modifier_config` is deliberately *not* registered: both `parseModifierConfig()`
+    /// and the settings view treat its absence as the trigger to migrate the pre-1.x
+    /// `hotkey_modifiers` / `hotkey_modifier` keys, and both already fall back to right ⌘.
+    private func registerDefaultSettings() {
+        UserDefaults.standard.register(defaults: [
+            "hotkey_keycode": 256,
+        ])
+    }
+
     func applicationWillFinishLaunching(_: Notification) {
+        registerDefaultSettings()
         NSApp.setActivationPolicy(.accessory)
     }
 
@@ -137,6 +166,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
                 self.appState.mode = self.appState.mode == mode ? .normal : mode
             }
+        }
+    }
+
+    /// Arms the handlers for every saved app-launch hotkey.
+    ///
+    /// This used to live inside the event-tap callback, which re-registered every handler on
+    /// every single key event — expensive enough to trip the tap's timeout, and done from the
+    /// tap's thread rather than the main actor. Doing it once at launch also fixes saved
+    /// hotkeys staying dead until some unrelated key happened to be pressed.
+    func registerAppLaunchHotkeys() {
+        for bundleURL in UserDefaults.standard.appHotkeys.keys {
+            registerAppLaunchHotkey(bundleURL: bundleURL)
+        }
+    }
+
+    func registerAppLaunchHotkey(bundleURL: String) {
+        KeyboardShortcuts.onKeyDown(for: .appLaunch(bundleURL)) { [weak self] in
+            // App-launch hotkeys are Pro-only. The handler is registered regardless so the
+            // shortcut stays claimed and survives the async licence check, but it only acts
+            // once a licence is present.
+            guard let self, self.proState.isPro else { return }
+            guard let url = URL(string: bundleURL) else { return }
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            NSWorkspace.shared.openApplication(at: url, configuration: config)
         }
     }
 
@@ -186,6 +240,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func currentAppNames() -> [String] {
         currentEntries().map { $0.appName.lowercased() }
+    }
+
+    /// Recomputes the snapshots the event tap matches against. Main thread only.
+    func refreshTapCaches() {
+        let names = currentAppNames()
+        let windows = appState.drillDownApp.map { fetchWindowsForApp($0) } ?? []
+        cacheLock.lock()
+        cachedAppNames = names
+        cachedDrillWindows = windows
+        cacheLock.unlock()
+    }
+
+    private func tapAppNames() -> [String] {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return cachedAppNames
+    }
+
+    private func tapDrillWindows() -> [WindowInfo] {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return cachedDrillWindows
     }
 
     func selectCurrentApp(named: String) {
@@ -342,17 +418,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
-        NotificationCenter.default.addObserver(forName: .appHotkeyAdded, object: nil, queue: .main) { note in
-            guard let bundleURL = note.object as? String else { return }
-            Task { @MainActor in
-                KeyboardShortcuts.onKeyDown(for: .appLaunch(bundleURL)) {
-                    guard let url = URL(string: bundleURL) else { return }
-                    let config = NSWorkspace.OpenConfiguration()
-                    config.activates = true
-                    NSWorkspace.shared.openApplication(at: url, configuration: config)
-                }
-            }
+        NotificationCenter.default.addObserver(forName: .appHotkeyAdded, object: nil, queue: .main) {
+            [weak self] note in
+            guard let self, let bundleURL = note.object as? String else { return }
+            self.registerAppLaunchHotkey(bundleURL: bundleURL)
         }
+
+        registerAppLaunchHotkeys()
 
         KeyboardShortcuts.onKeyDown(for: .hideMode) { [weak self] in
             self?.toggleMode(.hide)
@@ -383,6 +455,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        setupTapCacheRefresh()
         setupEventTap()
         setupAutoSelect()
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
@@ -392,6 +465,51 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.closeWindow()
             }
         }
+    }
+
+    /// Keeps the event tap's snapshots current, on the main thread, so the callback itself
+    /// never has to enumerate apps or windows.
+    func setupTapCacheRefresh() {
+        refreshTapCaches()
+
+        NotificationCenter.default.addObserver(
+            forName: .switcherWillShow, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.refreshTapCaches()
+        }
+
+        // Contents change without a fresh show when a mode is toggled or the user drills
+        // into an app's windows.
+        //
+        // `receive(on:)` is load-bearing, not tidiness: @Published fires from willSet, so a
+        // synchronous sink would recompute the caches from the *previous* value. Hopping to
+        // the next runloop pass means refreshTapCaches() sees the new one.
+        appState.$activeModeID
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.refreshTapCaches() }
+            .store(in: &cancellables)
+
+        appState.$drillDownApp
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.refreshTapCaches() }
+            .store(in: &cancellables)
+
+        // Apps launching or quitting while the overlay is open. Only worth recomputing while
+        // it is on screen — the tap consults the caches only then, and .switcherWillShow
+        // refreshes them on the way in.
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+        let didTerminate = workspaceCenter.publisher(
+            for: NSWorkspace.didTerminateApplicationNotification
+        )
+        workspaceCenter.publisher(for: NSWorkspace.didLaunchApplicationNotification)
+            .merge(with: didTerminate)
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, self.window.isVisible else { return }
+                self.refreshTapCaches()
+            }
+            .store(in: &cancellables)
     }
 
     func setupAutoSelect() {
@@ -433,6 +551,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard AXIsProcessTrusted() else {
             if permissionCheckTimer == nil {
+                print("Accessibility permission not granted — hotkeys are inactive, polling for it")
                 permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
                     [weak self] _ in
                     if AXIsProcessTrusted() {
@@ -460,6 +579,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 callback: { proxy, type, event, userInfo in
                     let delegate = Unmanaged<AppDelegate>.fromOpaque(userInfo!)
                         .takeUnretainedValue()
+                    // The system disables the tap if a callback overruns its timeout, or
+                    // when a secure input session takes over. Nothing re-arms it for us,
+                    // so without this every hotkey stops working until the app restarts.
+                    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                        delegate.reenableEventTap(reason: type)
+                        return nil
+                    }
                     return delegate.handleEvent(proxy: proxy, type: type, event: event)
                 },
                 userInfo: Unmanaged.passUnretained(self).toOpaque()
@@ -474,6 +600,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
         print("Event tap created successfully")
+    }
+
+    /// Re-arms the tap after macOS disabled it.
+    ///
+    /// While the tap was off we missed key events, so any modifier we believe is still
+    /// held may in fact have been released — clear the tracked state rather than let a
+    /// phantom modifier suppress or spuriously fire the hotkey.
+    func reenableEventTap(reason: CGEventType) {
+        guard let tap = eventTap else { return }
+        let cause = reason == .tapDisabledByTimeout ? "timeout" : "user input"
+        print("Event tap disabled by \(cause), re-enabling")
+        heldModifierKeyCodes.removeAll()
+        allModifiersHeldPreviously = false
+        CGEvent.tapEnable(tap: tap, enable: true)
     }
 
     private func typedCharacter(from event: CGEvent) -> String? {
@@ -497,11 +637,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let savedKeycode = UserDefaults.standard.integer(forKey: "hotkey_keycode")
 
-        if type == .flagsChanged, flagForKeyCode.keys.contains(keyCode) {
-            if flags.contains(flagForKeyCode[keyCode]!) {
-                heldModifierKeyCodes.insert(keyCode)
-            } else {
-                heldModifierKeyCodes.remove(keyCode)
+        if type == .flagsChanged {
+            if let flag = flagForKeyCode[keyCode] {
+                if !flags.contains(flag) {
+                    // Last key of this family went up.
+                    heldModifierKeyCodes.remove(keyCode)
+                } else if heldModifierKeyCodes.contains(keyCode) {
+                    // The family flag is still set because the *other* side is down, but
+                    // this key was already tracked, so this event is its release. Without
+                    // this, holding both shifts and releasing one left it stuck as held.
+                    heldModifierKeyCodes.remove(keyCode)
+                } else {
+                    heldModifierKeyCodes.insert(keyCode)
+                }
+            }
+            // Self-heal: drop anything whose family flag is no longer set at all. Key-ups
+            // missed while the tap was disabled, or swallowed by a system shortcut, would
+            // otherwise leave a modifier stuck as held for the rest of the session.
+            heldModifierKeyCodes = heldModifierKeyCodes.filter { code in
+                guard let flag = flagForKeyCode[code] else { return false }
+                return flags.contains(flag)
             }
         }
 
@@ -521,26 +676,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return nil
         }
+        // Both branches touch AppKit, which must not happen on the tap's thread.
         if window.isVisible, flags.contains(.maskCommand), keyCode == 43 {
-            closeWindow()
             DispatchQueue.main.async {
+                self.closeWindow()
                 NotificationCenter.default.post(name: .openSettingsRequested, object: nil)
             }
             return nil
         } else if window.isVisible, flags.contains(.maskCommand), keyCode == 12 {
-            NSApp.terminate(nil)
-            return nil
-        }
-
-        if proState.isPro {
-            for bundleURL in UserDefaults.standard.appHotkeys.keys {
-                KeyboardShortcuts.onKeyDown(for: .appLaunch(bundleURL)) {
-                    guard let url = URL(string: bundleURL) else { return }
-                    let config = NSWorkspace.OpenConfiguration()
-                    config.activates = true
-                    NSWorkspace.shared.openApplication(at: url, configuration: config)
-                }
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
             }
+            return nil
         }
 
         if savedKeycode == 256, type == .flagsChanged {
@@ -576,9 +723,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let candidate = appState.typed + pickerChar
                 let candidateLower = candidate.lowercased()
 
-                if let drillApp = appState.drillDownApp {
+                if appState.drillDownApp != nil {
                     // Window-picking mode: match against window titles for this app
-                    let allWindows = fetchWindowsForApp(drillApp)
+                    let allWindows = tapDrillWindows()
                     let matchingWindows = allWindows.filter {
                         $0.title.lowercased().hasPrefix(candidateLower)
                     }
@@ -605,7 +752,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
 
                 // App-picking mode: match against app names (unchanged)
-                let matchingNames = currentAppNames().filter { app in
+                let matchingNames = tapAppNames().filter { app in
                     app.hasPrefix(candidateLower)
                 }
                 if matchingNames.isEmpty {
