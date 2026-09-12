@@ -32,12 +32,30 @@ struct ThemeSettingsView: View, SettingsTab {
             }
 
             Section("Layout") {
-                Picker("View Style", selection: $layoutStyle) {
-                    Label("Grid", systemImage: "square.grid.2x2").tag("grid")
-                    Label("List", systemImage: "list.bullet").tag("list")
-                    Label("Circle", systemImage: "circle").tag("circle")
+                HStack(spacing: 12) {
+                    LayoutPreviewCard(
+                        style: "grid",
+                        label: "Grid",
+                        isSelected: layoutStyle == "grid"
+                    ) {
+                        layoutStyle = "grid"
+                    }
+                    LayoutPreviewCard(
+                        style: "list",
+                        label: "List",
+                        isSelected: layoutStyle == "list"
+                    ) {
+                        layoutStyle = "list"
+                    }
+                    LayoutPreviewCard(
+                        style: "circle",
+                        label: "Circle",
+                        isSelected: layoutStyle == "circle"
+                    ) {
+                        layoutStyle = "circle"
+                    }
                 }
-                .pickerStyle(.segmented)
+                .padding(.vertical, 4)
 
                 Picker("Window Position", selection: $windowPosition) {
                     ForEach(Position.allCases, id: \.rawValue) { pos in
