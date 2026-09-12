@@ -44,6 +44,7 @@ struct RunningAppListCell: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .contentShape(Rectangle())
+        .appContextMenu(for: app)
         .onTapGesture {
             if let override = app.overrideTap {
                 override(app)
