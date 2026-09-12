@@ -28,7 +28,7 @@ struct RunningApp: SwitchableApp, Equatable {
         @AppStorage("appBlacklists") var blacklist: [String] = []
         @AppStorage("prefixStrips") var prefixStrips: [String] = ["microsoft", "adobe"]
         let appRenames = UserDefaults.standard.appRenames
-        return NSWorkspace.shared.runningApplications
+        let processed = NSWorkspace.shared.runningApplications
             .map { app in
                 let customIcon = CustomIconStore.shared.load(for: app.bundleIdentifier ?? "")
                 let appName = (app.localizedName ?? "Unknown").filter("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890 ".contains)
@@ -41,7 +41,7 @@ struct RunningApp: SwitchableApp, Equatable {
                     bundleID: app.bundleIdentifier ?? ""
                 )
             }
-            .map { app in
+            .map { app -> RunningApp in
                 var app = app
                 for prefix in prefixStrips {
                     if app.appName.lowercased().hasPrefix(prefix.lowercased()) {
@@ -52,6 +52,25 @@ struct RunningApp: SwitchableApp, Equatable {
                 }
                 return app
             }
+
+        var nameCounts: [String: Int] = [:]
+        for app in processed {
+            nameCounts[app.appName.lowercased(), default: 0] += 1
+        }
+
+        var nameCounters: [String: Int] = [:]
+        let deduped = processed.map { app -> RunningApp in
+            var app = app
+            let key = app.appName.lowercased()
+            if nameCounts[key]! > 1 {
+                let index = nameCounters[key, default: 0]
+                nameCounters[key] = index + 1
+                app.appName = "\(letterForIndex(index)) - \(app.appName)"
+            }
+            return app
+        }
+
+        return deduped
             .filter { app in
                 app.app.activationPolicy == .regular
                     && (!blacklist.contains(app.appName.lowercased()) || !usState.isPro)
