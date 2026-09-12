@@ -217,14 +217,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard CustomModeStore.load().contains(where: { $0.id.uuidString == id }) else { return }
         DispatchQueue.main.async {
             if self.window.isVisible {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
-                    self.appState.activeModeID = self.appState.activeModeID == id ? nil : id
+                if self.appState.activeModeID == id {
+                    // Same mode again: toggle the window closed.
+                    self.closeWindow()
+                } else {
+                    // Different mode (or default switcher): swap content in place.
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
+                        self.appState.activeModeID = id
+                        self.appState.typed = ""
+                        self.appState.depth = 0
+                    }
+                    self.resizeWindowToFit(force: true)
                 }
             } else {
+                // Hidden: set the mode *before* showing so the panel renders its final
+                // content and size off-screen, then reveal it once — no flicker.
                 self.appState.activeModeID = id
-                self.positionWindow()
-                NotificationCenter.default.post(name: .switcherWillShow, object: nil)
-                self.window.orderFrontRegardless()
+                self.appState.typed = ""
+                self.appState.depth = 0
+                DispatchQueue.main.async {
+                    self.resizeWindowToFit(force: true)
+                    self.positionWindow()
+                    NotificationCenter.default.post(name: .switcherWillShow, object: nil)
+                    self.window.orderFrontRegardless()
+                }
             }
         }
     }
@@ -344,8 +360,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func resizeWindowToFit() {
-        guard window.isVisible else { return }
+    func resizeWindowToFit(force: Bool = false) {
+        guard force || window.isVisible else { return }
         guard let hostingView = window.contentView else { return }
         hostingView.layoutSubtreeIfNeeded()
         let newSize = hostingView.fittingSize
@@ -668,10 +684,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     } else {
                         self.appState.typed = ""
                     }
-                } else if self.appState.typed.isEmpty {
-                    self.closeWindow()
-                } else {
+                } else if !self.appState.typed.isEmpty {
                     self.appState.typed = ""
+                } else if self.appState.activeModeID != nil {
+                    // Step back to the normal switcher before closing.
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
+                        self.appState.activeModeID = nil
+                    }
+                    self.resizeWindowToFit(force: true)
+                } else {
+                    self.closeWindow()
                 }
             }
             return nil
