@@ -626,7 +626,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         guard length > 0 else { return nil }
         let s = String(utf16CodeUnits: chars, count: length)
-        guard s.count == 1, let c = s.first, c.isLetter || c.isNumber else { return nil }
+        guard s.count == 1, let c = s.first, c.isLetter || c.isNumber || c == " " else { return nil }
         return String(c).lowercased()
     }
 
