@@ -7,11 +7,23 @@ struct ListAppLayout: View {
 
     @Environment(\.modeTheme) var modeTheme
 
+    private var filteredApps: [any SwitchableApp] {
+        apps.filter {
+            $0.appName.lowercased().starts(with: typed.lowercased())
+        }
+    }
+
+    private var chunkedApps: [[any SwitchableApp]] {
+        filteredApps.chunkedEvenly(maxPerRow: 10) // reuse same helper — "maxPerRow" here means "max per column"
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            ForEach(apps, id: \.id) { app in
-                if app.appName.lowercased().starts(with: typed.lowercased()) {
-                    RunningAppListCell(app: app, depth: typed.count, onTap: onTap)
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(chunkedApps.indices, id: \.self) { columnIndex in
+                VStack(spacing: 0) {
+                    ForEach(chunkedApps[columnIndex], id: \.id) { app in
+                        RunningAppListCell(app: app, depth: typed.count, onTap: onTap)
+                    }
                 }
             }
         }
