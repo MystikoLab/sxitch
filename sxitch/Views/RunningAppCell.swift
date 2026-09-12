@@ -36,6 +36,8 @@ struct RunningAppCell: View {
             }
             Text(app.appName)
                 .opacity(0.7)
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .foregroundStyle(modeTheme.foregroundStyle)
         }
         .frame(maxWidth: 60)
