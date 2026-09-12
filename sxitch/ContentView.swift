@@ -31,6 +31,15 @@ struct ContentView: View {
         return openApps
     }
 
+    private var appContextActions: AppContextActions {
+        AppContextActions(
+            blacklist: blacklistApp,
+            rename: renameApp,
+            modes: CustomModeStore.load(),
+            addToMode: addAppToMode
+        )
+    }
+
     @ViewBuilder
     private var appLayout: some View {
         if !showUi {
@@ -69,6 +78,7 @@ struct ContentView: View {
                         )
                     }
                 }
+                .environment(\.appContextActions, appContextActions)
                 .environment(\.modeTheme, ModeTheme.theme(for: appState.mode))
                 .id("\(appState.mode.rawValue)-\(appState.activeModeID ?? "default")")
             }
@@ -195,6 +205,56 @@ struct ContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             appDelegate.resizeWindowToFit()
         }
+    }
+
+    private func blacklistApp(_ app: any SwitchableApp) {
+        appDelegate.closeWindow()
+        let name = app.appName.lowercased()
+        if !blacklist.contains(name) {
+            blacklist.append(name)
+        }
+    }
+
+    private func renameApp(_ app: any SwitchableApp) {
+        appDelegate.closeWindow()
+        let currentName = app.appName
+        let alert = NSAlert()
+        alert.messageText = "Rename \"\(currentName)\""
+        alert.informativeText = "The new name will be shown in the switcher."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Rename")
+        alert.addButton(withTitle: "Cancel")
+
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        input.stringValue = currentName
+        input.placeholderString = "App name"
+        alert.accessoryView = input
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let newName = input.stringValue.trimmingCharacters(in: .whitespaces)
+        let key = currentName.lowercased()
+        var renames = UserDefaults.standard.appRenames
+        if newName.isEmpty || newName == currentName {
+            renames.removeValue(forKey: key)
+        } else {
+            renames[key] = newName
+        }
+        UserDefaults.standard.appRenames = renames
+        NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
+        reloadEntries()
+    }
+
+    private func addAppToMode(_ app: any SwitchableApp, _ mode: CustomMode) {
+        appDelegate.closeWindow()
+        guard let bundleURL = app.runningApplication?.bundleURL?.absoluteString else { return }
+        var modes = CustomModeStore.load()
+        guard let index = modes.firstIndex(where: { $0.id == mode.id }) else { return }
+        if modes[index].apps.contains(where: { $0.bundleURL == bundleURL }) { return }
+        modes[index].apps.append(
+            ModeApp(bundleURL: bundleURL, displayName: app.appName)
+        )
+        CustomModeStore.save(modes)
+        NotificationCenter.default.post(name: .customModesChanged, object: nil)
     }
 
     func handleAppTap(_ app: any SwitchableApp) {
