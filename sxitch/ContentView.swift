@@ -136,6 +136,11 @@ struct ContentView: View {
                     }
                 } else if !appState.typed.isEmpty {
                     appState.typed = ""
+                } else if appState.activeModeID != nil {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
+                        appState.activeModeID = nil
+                    }
+                    appDelegate.resizeWindowToFit(force: true)
                 } else {
                     appDelegate.closeWindow()
                 }
@@ -150,8 +155,10 @@ struct ContentView: View {
                 NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
             }
             .onChange(of: appState.activeModeID) { _, _ in
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                    reloadEntries()
+                if appDelegate.window.isVisible {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                        reloadEntries()
+                    }
                 }
             }
             .onChange(of: appState.typed) { _, _ in
