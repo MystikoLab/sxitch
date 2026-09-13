@@ -22,4 +22,15 @@ extension UserDefaults {
         get { (dictionary(forKey: "app_renames") as? [String: String]) ?? [:] }
         set { set(newValue, forKey: "app_renames") }
     }
+
+    var pinnedAppURLs: [String] {
+        get {
+            if let arr = object(forKey: "pinned_app_urls") as? [String] { return arr }
+            if let raw = string(forKey: "pinned_app_urls") {
+                if let arr = Array<String>(rawValue: raw) { return arr }
+            }
+            return []
+        }
+        set { set(newValue.rawValue, forKey: "pinned_app_urls") }
+    }
 }

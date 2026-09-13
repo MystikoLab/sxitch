@@ -11,6 +11,7 @@ struct ContentView: View {
 
     @AppStorage("appBlacklists") var blacklist: [String] = []
     @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"]
+    @AppStorage("pinned_app_urls") var pinnedAppURLs: [String] = []
     @AppStorage("layoutStyle") var layoutStyle: String = "grid"
     @AppStorage("showPickerUi") private var showUi = true
 
@@ -36,7 +37,8 @@ struct ContentView: View {
             blacklist: blacklistApp,
             rename: renameApp,
             modes: CustomModeStore.load(),
-            addToMode: addAppToMode
+            addToMode: addAppToMode,
+            togglePin: togglePinApp
         )
     }
 
@@ -160,6 +162,10 @@ struct ContentView: View {
                 reloadEntries()
                 NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
             }
+            .onChange(of: pinnedAppURLs) { _, _ in
+                reloadEntries()
+                NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
+            }
             .onChange(of: prefixStrip) { _, _ in
                 reloadEntries()
                 NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
@@ -242,6 +248,16 @@ struct ContentView: View {
         UserDefaults.standard.appRenames = renames
         NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
         reloadEntries()
+    }
+
+    private func togglePinApp(_ app: any SwitchableApp) {
+        guard let url = app.pinnedBundleURL else { return }
+        appDelegate.closeWindow()
+        if let index = pinnedAppURLs.firstIndex(of: url) {
+            pinnedAppURLs.remove(at: index)
+        } else {
+            pinnedAppURLs.append(url)
+        }
     }
 
     private func addAppToMode(_ app: any SwitchableApp, _ mode: CustomMode) {
