@@ -251,7 +251,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         {
             return mode.apps.map { PinnedApp(modeApp: $0) }
         }
-        return RunningApp.fetchRunningApps()
+        var entries: [any SwitchableApp] = RunningApp.fetchRunningApps()
+        let pinnedURLs = UserDefaults.standard.pinnedAppURLs
+        let runningURLs = Set(
+            entries.compactMap {
+                ($0.runningApplication?.bundleURL?.absoluteString)
+                    ?? (($0 as? PinnedApp)?.modeApp.bundleURL)
+            }
+        )
+        for url in pinnedURLs where !runningURLs.contains(url) {
+            let path = URL(string: url)?.path ?? url
+            let name = FileManager.default.displayName(atPath: path)
+            entries.append(
+                PinnedApp(
+                    modeApp: ModeApp(
+                        bundleURL: url,
+                        displayName: name.isEmpty ? "App" : name
+                    )
+                )
+            )
+        }
+        return entries
     }
 
     func currentAppNames() -> [String] {

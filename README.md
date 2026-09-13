@@ -20,13 +20,13 @@ Sxitch is a native macos app switcher that uses the apps name to pick the app (a
   - Launch apps (added)
   - Call shell commands
   - Customise icons (added)
+- App renames
+- Pinned apps
 
 ## Roadmap:
 - Autoupdate using sparkle
 - Add / remove elements from custom modes using deeplinks
-- "Dock" mode (launch apps + apps kept in the dock)
 - Optional "enter" mode (require confirmation before switching)
-- Per app key. Each app will have their own keypress
 - Press and hold Hotkey option (config option)
 - Don't auto close Sxitch after a new app opens (config option)
 - Multi Open while holding Shift 
