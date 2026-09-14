@@ -1,11 +1,26 @@
+
 import SwiftUI
 
-struct RunningAppListCell: View {
+struct RunningAppSearchCell: View {
     let app: any SwitchableApp
     let depth: Int
+    let typed: String
     let onTap: (any SwitchableApp) -> Void
 
     @Environment(\.modeTheme) var modeTheme
+
+    private var highlightedName: Text {
+        let name = app.appName
+        let query = typed.lowercased()
+        guard !query.isEmpty, name.lowercased().hasPrefix(query) else {
+            return Text(name).foregroundStyle(modeTheme.foregroundStyle.opacity(0.7))
+        }
+        return Text(name.prefix(query.count))
+            .fontWeight(.semibold)
+            .foregroundStyle(modeTheme.foregroundStyle)
+        + Text(name.dropFirst(query.count))
+            .foregroundStyle(modeTheme.foregroundStyle.opacity(0.7))
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -14,13 +29,13 @@ struct RunningAppListCell: View {
                     Image(systemName: symbol)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 36, height: 36)
+                        .frame(width: 48, height: 48)
                         .foregroundStyle(modeTheme.foregroundStyle)
                 } else {
                     Image(nsImage: app.icon)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 36, height: 36)
+                        .frame(width: 48, height: 48)
                         .clipped()
                 }
 
@@ -35,10 +50,9 @@ struct RunningAppListCell: View {
                 }
             }
 
-            Text(app.appName)
+            highlightedName
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .opacity(0.7)
                 .foregroundStyle(modeTheme.foregroundStyle)
 
             Spacer()

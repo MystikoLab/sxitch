@@ -54,6 +54,13 @@ struct ThemeSettingsView: View, SettingsTab {
                     ) {
                         layoutStyle = "circle"
                     }
+                    LayoutPreviewCard(
+                        style: "search",
+                        label: "search",
+                        isSelected: layoutStyle == "search"
+                    ) {
+                        layoutStyle = "search"
+                    }
                 }
                 .padding(.vertical, 4)
 

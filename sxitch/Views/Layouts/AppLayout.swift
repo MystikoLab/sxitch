@@ -20,6 +20,8 @@ struct AnyAppLayout: View {
             ListAppLayout(apps: apps, typed: typed, onTap: onTap)
         case "circle":
             CircleAppLayout(apps: apps, typed: typed, onTap: onTap)
+        case "search":
+            SearchAppLayout(apps: apps, typed: typed, onTap: onTap)
         default:
             GridAppLayout(apps: apps, typed: typed, onTap: onTap)
         }

@@ -84,6 +84,7 @@ struct LayoutPreviewCard: View {
         switch style {
         case "list": return 3
         case "circle": return 5
+        case "search": return 3
         default: return 4
         }
     }
@@ -93,6 +94,7 @@ struct LayoutPreviewCard: View {
         switch style {
         case "list": listPreview
         case "circle": circlePreview
+        case "search": searchPreview
         default: gridPreview
         }
     }
@@ -127,6 +129,29 @@ struct LayoutPreviewCard: View {
             }
         }
     }
+
+    private var searchPreview: some View {
+        VStack(spacing: 4) {
+            SearchBarSlot()
+
+            VStack(spacing: 3) {
+                ForEach(0..<slotCount, id: \.self) { index in
+                    QuadSlot(isActive: activeIndex == index && isAnimating, isListRow: true, size: 9)
+                }
+            }
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0.6),
+                        .init(color: .clear, location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+        }
+    }
+
 }
 
 private struct PreviewBackdrop: ViewModifier {
@@ -151,11 +176,20 @@ private struct PreviewBackdrop: ViewModifier {
 private struct QuadSlot: View {
     let isActive: Bool
     var isListRow = false
+    var size: CGFloat? = nil
+
+    private var resolvedWidth: CGFloat {
+        size ?? (isListRow ? 20 : 14)
+    }
+
+    private var resolvedHeight: CGFloat {
+        size ?? 14
+    }
 
     var body: some View {
         RoundedRectangle(cornerRadius: isListRow ? 3 : 4)
             .fill(isActive ? Color.accentColor : Color.primary.opacity(0.18))
-            .frame(width: isListRow ? 20 : 14, height: 14)
+            .frame(width: resolvedWidth, height: resolvedHeight)
             .scaleEffect(isActive ? 1.15 : 1)
             .overlay(
                 RoundedRectangle(cornerRadius: isListRow ? 3 : 4)
@@ -164,5 +198,26 @@ private struct QuadSlot: View {
                         lineWidth: 1
                     )
             )
+    }
+}
+
+private struct SearchBarSlot: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Circle()
+                .strokeBorder(Color.primary.opacity(0.4), lineWidth: 1)
+                .frame(width: 5, height: 5)
+
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Color.primary.opacity(0.18))
+                .frame(height: 3)
+        }
+        .padding(.horizontal, 5)
+        .frame(height: 11)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 5)
+                .fill(Color.primary.opacity(0.07))
+        )
     }
 }
