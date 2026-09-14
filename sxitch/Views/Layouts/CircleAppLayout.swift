@@ -15,7 +15,7 @@ struct CircleAppLayout: View {
         apps.filter { $0.appName.lowercased().starts(with: typed.lowercased()) }
     }
 
-    // Ring 1 holds 5, ring 2 holds 10, ring 3 holds 15, etc.
+    /// Ring 1 holds 5, ring 2 holds 10, ring 3 holds 15, etc.
     private var rings: [[any SwitchableApp]] {
         var result: [[any SwitchableApp]] = []
         var startIndex = 0
@@ -24,7 +24,7 @@ struct CircleAppLayout: View {
         while startIndex < filtered.count {
             let capacity = ringIncrement * ringNumber
             let endIndex = min(startIndex + capacity, filtered.count)
-            result.append(Array(filtered[startIndex..<endIndex]))
+            result.append(Array(filtered[startIndex ..< endIndex]))
             startIndex = endIndex
             ringNumber += 1
         }
@@ -32,8 +32,8 @@ struct CircleAppLayout: View {
         return result
     }
 
-    // Computed cumulatively so each ring's radius clears the previous
-    // ring's actual outer edge, regardless of how full either ring is.
+    /// Computed cumulatively so each ring's radius clears the previous
+    /// ring's actual outer edge, regardless of how full either ring is.
     private var ringRadii: [CGFloat] {
         var radii: [CGFloat] = []
         var previousOuterEdge: CGFloat = 0

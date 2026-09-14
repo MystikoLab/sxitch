@@ -25,9 +25,13 @@ extension UserDefaults {
 
     var pinnedAppURLs: [String] {
         get {
-            if let arr = object(forKey: "pinned_app_urls") as? [String] { return arr }
+            if let arr = object(forKey: "pinned_app_urls") as? [String] {
+                return arr
+            }
             if let raw = string(forKey: "pinned_app_urls") {
-                if let arr = Array<String>(rawValue: raw) { return arr }
+                if let arr = [String](rawValue: raw) {
+                    return arr
+                }
             }
             return []
         }

@@ -43,11 +43,11 @@ extension Array {
         var result: [[Element]] = []
         var startIndex = 0
 
-        for row in 0..<rows {
+        for row in 0 ..< rows {
             let thisRowSize = baseSize + (row < remainder ? 1 : 0)
             guard thisRowSize > 0 else { break }
             let endIndex = startIndex + thisRowSize
-            result.append(Array(self[startIndex..<endIndex]))
+            result.append(Array(self[startIndex ..< endIndex]))
             startIndex = endIndex
         }
 

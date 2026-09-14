@@ -265,7 +265,9 @@ struct ContentView: View {
         guard let bundleURL = app.runningApplication?.bundleURL?.absoluteString else { return }
         var modes = CustomModeStore.load()
         guard let index = modes.firstIndex(where: { $0.id == mode.id }) else { return }
-        if modes[index].apps.contains(where: { $0.bundleURL == bundleURL }) { return }
+        if modes[index].apps.contains(where: { $0.bundleURL == bundleURL }) {
+            return
+        }
         modes[index].apps.append(
             ModeApp(bundleURL: bundleURL, displayName: app.appName)
         )

@@ -18,7 +18,7 @@ struct RunningAppSearchCell: View {
         return Text(name.prefix(query.count))
             .fontWeight(.semibold)
             .foregroundStyle(modeTheme.foregroundStyle)
-        + Text(name.dropFirst(query.count))
+            + Text(name.dropFirst(query.count))
             .foregroundStyle(modeTheme.foregroundStyle.opacity(0.7))
     }
 
