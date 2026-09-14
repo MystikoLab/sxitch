@@ -193,4 +193,30 @@ First-run wizard with pages:
 
 ---
 
+## Changelog — v1.4.1 → v1.4.2 → v1.4.3 → v1.5 (unreleased)
+
+### v1.4.1
+- **Shell command execution** (#18) — Custom modes can run shell commands via `/bin/zsh`; Homebrew paths are auto-prepended to `PATH` (Core/ShellCommandRunner.swift)
+- **Multiple keyboard layout support** (#20) — Typed characters are resolved via `CGEvent.keyboardGetUnicodeString` instead of a hardcoded US keycode map, so non-QWERTY layouts work
+- Fixes (#17) — Mode hotkeys settable in the free plan; stopped radial/circle view icons rotating
+
+### v1.4.2
+- **App renames** (#23) — Rename any app from Settings → General; renames used for typing-based matching (persisted as `app_renames`)
+- **Typing matching for window picking** (#24) — Drill into an app's windows and select a window by typing its title prefix, with progressive multi-character disambiguation
+- **Pro alerts** — Non-Pro pressing Hide/Quit gets a native alert with a "Get Sxitch Pro" button
+- **In-app Pro purchase** — Settings → Activate shows Buy Once ($10 lifetime) / Subscribe ($2 mo) Polar checkout options
+
+### v1.4.3
+- **Same-name keyboard picking** (#33) — Duplicate window titles get letter prefixes ("A - Untitled") so they can be picked apart by typing; space key fix
+- **Grid wrap** (#32) — Grid/List/Circle layouts wrap into multiple rows, long names truncated, new live LayoutPreview in Settings
+- **Hotkey reliability fixes** (#28) — Sentinel keycode registration (hotkeys never triggering), event tap re-arming, snapshot list reads in tap callback, main-thread dispatch, one-time hotkey registration, stuck-modifier cleanup
+- **Mode UX fixes** (#34) — Escape backs out of a custom mode first; mode panels swap in place, no flicker, forced resize
+
+### v1.5 (unreleased — current main)
+- **Right-click context menu** (#37, Pro) — Blacklist, Rename, Add to custom mode, Pin/unpin on any switcher entry
+- **Pinned apps** (#38) — Pinned apps always remain visible at the top of the switcher (persisted as `pinned_app_urls`)
+- **Search view + backspace support** (#39) — New Search layout filtering apps by typed prefix with live search text, plus backspace deletes typed characters
+
+---
+
 *Generated from codebase analysis — 30 Rust source files, ~6,500 lines of code.*
