@@ -20,9 +20,9 @@ struct GeneralSettingsView: View, SettingsTab {
     @State private var isLaunchAtLoginEnabled: Bool = SMAppService.mainApp.status == .enabled
 
     @AppStorage("hotkey_modifier_config") private var modifierConfig: String = "1:right"
-    // 256 == "None" (modifier-only). Must match the value registered in
-    // AppDelegate.registerDefaultSettings(), otherwise the picker shows a
-    // different hotkey than the event tap actually listens for.
+    /// 256 == "None" (modifier-only). Must match the value registered in
+    /// AppDelegate.registerDefaultSettings(), otherwise the picker shows a
+    /// different hotkey than the event tap actually listens for.
     @AppStorage("hotkey_keycode") private var keycode: Int = 256
 
     @State private var overrides: [String: String] = UserDefaults.standard.keyOverrides

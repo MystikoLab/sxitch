@@ -99,7 +99,7 @@ struct LayoutPreviewCard: View {
 
     private var gridPreview: some View {
         HStack(spacing: 4) {
-            ForEach(0..<4, id: \.self) { index in
+            ForEach(0 ..< 4, id: \.self) { index in
                 QuadSlot(isActive: activeIndex == index && isAnimating)
             }
         }
@@ -107,7 +107,7 @@ struct LayoutPreviewCard: View {
 
     private var listPreview: some View {
         VStack(spacing: 4) {
-            ForEach(0..<3, id: \.self) { index in
+            ForEach(0 ..< 3, id: \.self) { index in
                 QuadSlot(isActive: activeIndex == index && isAnimating, isListRow: true)
             }
         }
@@ -117,7 +117,7 @@ struct LayoutPreviewCard: View {
         let count = slotCount
         let radius: CGFloat = 13
         return ZStack {
-            ForEach(0..<count, id: \.self) { index in
+            ForEach(0 ..< count, id: \.self) { index in
                 let angle = (Double(index) / Double(count)) * 2 * .pi - .pi / 2
                 QuadSlot(isActive: activeIndex == index && isAnimating)
                     .offset(
@@ -132,7 +132,7 @@ struct LayoutPreviewCard: View {
 private struct PreviewBackdrop: ViewModifier {
     let style: String
 
-    @ViewBuilder func body(content: Content) -> some View {
+    func body(content: Content) -> some View {
         if style == "circle" {
             content
         } else {

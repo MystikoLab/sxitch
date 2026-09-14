@@ -1,6 +1,6 @@
 extension String {
     func capitalizedFirst() -> String {
-        guard let first = self.first else { return self }
-        return first.uppercased() + self.dropFirst()
+        guard let first = first else { return self }
+        return first.uppercased() + dropFirst()
     }
 }
