@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xcuserdatad/
+
+# SourceKit-LSP (xcode-build-server)
+buildServer.json
+
+# SwiftPM
+.build/
+.swiftpm/

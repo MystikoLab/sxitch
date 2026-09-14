@@ -1,0 +1,3 @@
+# SwiftFormat configuration
+# Uses default rules; pin SwiftFormat version used by humans & CI (0.62.x).
+--swift-version 5.0

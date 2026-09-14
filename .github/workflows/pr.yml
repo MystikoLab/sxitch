@@ -1,0 +1,30 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: ["**"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    name: SwiftFormat check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install swiftformat
+        run: brew install swiftformat
+      - name: Lint
+        run: swiftformat --lint .
+
+  build:
+    name: Build (Debug)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Build
+        run: xcodebuild -scheme sxitch -project sxitch.xcodeproj -quiet build
