@@ -27,4 +27,6 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
       - name: Build
-        run: xcodebuild -scheme sxitch -project sxitch.xcodeproj -quiet build
+        run: >
+          xcodebuild -scheme sxitch -project sxitch.xcodeproj -quiet build
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
