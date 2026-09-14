@@ -753,6 +753,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if window.isVisible, flags == CGEventFlags(rawValue: 256) {
+            // Backspace: remove the last typed character so a typo doesn't force
+            // Escape + full retype.
+            if keyCode == 51, !appState.typed.isEmpty {
+                DispatchQueue.main.async {
+                    let removed = self.appState.typed.removeLast()
+                    self.appState.depth = max(0, self.appState.depth - String(removed).count)
+                }
+                return nil
+            }
             if let letter = typedCharacter(from: event) {
                 let raw = String(letter)
                 let pickerChar: String
