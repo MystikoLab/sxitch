@@ -413,7 +413,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.backgroundColor = .clear
         window.level = NSWindow.Level(NSWindow.Level.floating.rawValue + 200)
         window.isMovableByWindowBackground = true
-        window.collectionBehavior = [.canJoinAllSpaces, .stationary]
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
 
         let contentView = NSHostingView(
             rootView: ContentView(appState: appState, appDelegate: self)
