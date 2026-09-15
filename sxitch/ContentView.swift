@@ -93,7 +93,7 @@ struct ContentView: View {
             appLayout
         } else {
             appLayout
-                .modernMacBackground()
+                .modernMacBackground(cornerRadius: 30)
                 .clipShape(RoundedRectangle(cornerRadius: 30))
         }
     }

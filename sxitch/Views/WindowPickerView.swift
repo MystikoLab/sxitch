@@ -98,10 +98,7 @@ struct WindowPickerView: View {
         .padding(8)
         .frame(maxWidth: .infinity)
         .contentShape(RoundedRectangle(cornerRadius: 12))
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.4))
-        )
+        .glassTile(cornerRadius: 12)
         .onTapGesture {
             modeTheme.windowAction(window)
             onSelect()

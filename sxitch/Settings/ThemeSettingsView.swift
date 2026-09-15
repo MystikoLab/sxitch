@@ -8,8 +8,10 @@ struct ThemeSettingsView: View, SettingsTab {
     @AppStorage("accentColorHex") var accentColorHex: String = "system"
     @AppStorage("layoutStyle") var layoutStyle: String = "grid"
     @AppStorage("windowPosition") var windowPosition: String = Position.default.rawValue
+    @AppStorage("liquidGlass") var liquidGlass: Bool = true
     @AppStorage("showPickerUi") var showUi = true
     @AppStorage("windowPickerEnabled") private var windowPickerEnabled: Bool = true
+    @AppStorage("showMenuIcon") var showMenuIcon: Bool = true
 
     private var usState = userState.shared
 
@@ -28,6 +30,23 @@ struct ThemeSettingsView: View, SettingsTab {
 
     var body: some View {
         Form {
+            Section {
+                Toggle(isOn: $showMenuIcon) {
+                    Text("Show menubar icon")
+                }
+            }
+
+            Section("Appearance") {
+                Toggle(isOn: $liquidGlass) {
+                    Text("Liquid Glass")
+                }
+                Text(
+                    "Apply the native Liquid Glass material to the switcher overlay."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+
             Section("Layout") {
                 HStack(spacing: 12) {
                     LayoutPreviewCard(

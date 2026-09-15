@@ -122,6 +122,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "hotkey_keycode": 256,
         ])
+        if #available(macOS 26.0, *) {
+            UserDefaults.standard.register(defaults: [
+                "liquidGlass": true,
+            ])
+        }
     }
 
     func applicationWillFinishLaunching(_: Notification) {
