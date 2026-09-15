@@ -162,7 +162,7 @@ private struct PreviewBackdrop: ViewModifier {
         } else {
             content
                 .padding(3)
-                .modernMacBackground()
+                .modernMacBackground(cornerRadius: 8)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)

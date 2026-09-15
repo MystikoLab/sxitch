@@ -9,6 +9,7 @@ struct ThemeSettingsView: View, SettingsTab {
     @AppStorage("accentColorHex") var accentColorHex: String = "system"
     @AppStorage("layoutStyle") var layoutStyle: String = "grid"
     @AppStorage("windowPosition") var windowPosition: String = Position.default.rawValue
+    @AppStorage("liquidGlass") var liquidGlass: Bool = true
 
     private let presets: [(name: String, color: Color)] = [
         ("Blue", .blue),
@@ -29,6 +30,17 @@ struct ThemeSettingsView: View, SettingsTab {
                 Toggle(isOn: $showMenuIcon) {
                     Text("Show menubar icon")
                 }
+            }
+
+            Section("Appearance") {
+                Toggle(isOn: $liquidGlass) {
+                    Text("Liquid Glass")
+                }
+                Text(
+                    "Apply the native Liquid Glass material to the switcher overlay."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
 
             Section("Layout") {
