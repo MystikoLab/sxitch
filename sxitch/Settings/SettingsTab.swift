@@ -16,9 +16,10 @@ struct AnySettingsTab: Identifiable {
 enum RegisteredTabs {
     static var all: [AnySettingsTab] = [
         AnySettingsTab(id: "general", title: "General", icon: "gear", content: AnyView(GeneralSettingsView())),
-        AnySettingsTab(id: "theme", title: "Theme", icon: "paintpalette.fill", content: AnyView(ThemeSettingsView())),
-        AnySettingsTab(id: "advanced", title: "Advanced", icon: "slider.horizontal.3", content: AnyView(AdvancedSettingsView())),
-        AnySettingsTab(id: "activate", title: "Activate", icon: "lock", content: AnyView(ActivateSettingsView())),
+        AnySettingsTab(id: "keyboard", title: "Keyboard", icon: "keyboard", content: AnyView(KeyboardSettingsView())),
+        AnySettingsTab(id: "appearance", title: "Appearance", icon: "paintpalette.fill", content: AnyView(ThemeSettingsView())),
         AnySettingsTab(id: "modes", title: "Modes", icon: "square.stack.3d.up", content: AnyView(CustomModesSettingsView())),
+        AnySettingsTab(id: "filters", title: "Filters", icon: "line.3.horizontal.decrease.circle", content: AnyView(FilterSettingsView())),
+        AnySettingsTab(id: "activate", title: "Activate", icon: "lock", content: AnyView(ActivateSettingsView())),
     ]
 }
