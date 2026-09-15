@@ -11,6 +11,7 @@ struct ThemeSettingsView: View, SettingsTab {
     @AppStorage("liquidGlass") var liquidGlass: Bool = true
     @AppStorage("showPickerUi") var showUi = true
     @AppStorage("windowPickerEnabled") private var windowPickerEnabled: Bool = true
+    @AppStorage("showMenuIcon") var showMenuIcon: Bool = true
 
     private var usState = userState.shared
 
