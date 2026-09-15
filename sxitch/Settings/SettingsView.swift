@@ -52,7 +52,11 @@ struct SettingsView: View {
         NavigationSplitView {
             List(selection: Binding(
                 get: { selectedTab },
-                set: { if let value = $0 { selectedTab = value } }
+                set: {
+                    if let value = $0 {
+                        selectedTab = value
+                    }
+                }
             )) {
                 ForEach(tabs) { tab in
                     Label {
@@ -102,12 +106,15 @@ struct SettingsView: View {
         DispatchQueue.main.async {
             if let toolbar = window.toolbar {
                 for item in toolbar.items
-                where String(describing: item.action).contains("toggleSidebar") {
+                    where String(describing: item.action).contains("toggleSidebar")
+                {
                     toolbar.removeItem(identifier: item.itemIdentifier)
                 }
             }
         }
-        for observer in windowObservers { NotificationCenter.default.removeObserver(observer) }
+        for observer in windowObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
         windowObservers.removeAll()
         windowObservers.append(
             NotificationCenter.default.addObserver(
@@ -122,13 +129,13 @@ struct SettingsView: View {
 struct WindowAccessor: NSViewRepresentable {
     @Binding var window: NSWindow?
 
-    func makeNSView(context: Context) -> NSView {
+    func makeNSView(context _: Context) -> NSView {
         let view = WindowFinderView()
         view.onWindowFound = { window = $0 }
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_: NSView, context _: Context) {}
 
     final class WindowFinderView: NSView {
         var onWindowFound: ((NSWindow?) -> Void)?
