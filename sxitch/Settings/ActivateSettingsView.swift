@@ -84,7 +84,7 @@ struct ActivateSettingsView: View, SettingsTab {
                 }
                 Section(
                     header: Text("Get Sxitch Pro"),
-                    footer: Text("You'll receive a license key by email after purchase — activate it below.")
+                    footer: Text(                        "You'll receive a license key by email after purchase. Activate it below.")
                 ) {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach([

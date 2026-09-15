@@ -1,15 +1,18 @@
 import SwiftUI
 
 struct ThemeSettingsView: View, SettingsTab {
-    static let tabID = "theme"
-    static let tabTitle = "Theme"
+    static let tabID = "appearance"
+    static let tabTitle = "Appearance"
     static let tabIcon = "paintpalette.fill"
 
-    @AppStorage("showMenuIcon") var showMenuIcon: Bool = true
     @AppStorage("accentColorHex") var accentColorHex: String = "system"
     @AppStorage("layoutStyle") var layoutStyle: String = "grid"
     @AppStorage("windowPosition") var windowPosition: String = Position.default.rawValue
     @AppStorage("liquidGlass") var liquidGlass: Bool = true
+    @AppStorage("showPickerUi") var showUi = true
+    @AppStorage("windowPickerEnabled") private var windowPickerEnabled: Bool = true
+
+    private var usState = userState.shared
 
     private let presets: [(name: String, color: Color)] = [
         ("Blue", .blue),
@@ -80,6 +83,25 @@ struct ThemeSettingsView: View, SettingsTab {
                     ForEach(Position.allCases, id: \.rawValue) { pos in
                         Text(pos.displayName).tag(pos.rawValue)
                     }
+                }
+            }
+
+            Section("Switcher UI") {
+                Toggle("Show picker UI", isOn: $showUi)
+                HStack {
+                    Toggle("Window Picker", isOn: $windowPickerEnabled)
+                        .disabled(!usState.isPro)
+                    if !usState.isPro {
+                        Spacer()
+                        Label("Pro", systemImage: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if !usState.isPro {
+                    Text("Upgrade to Pro to pick individual windows when an app has multiple open.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
