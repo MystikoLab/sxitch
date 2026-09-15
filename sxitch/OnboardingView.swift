@@ -395,7 +395,7 @@ struct FinishPage: View {
                     .fontWeight(.bold)
 
                 Text(
-                    "Sxitch lives in your menu bar. Press your hotkey anytime to switch apps.\nEnjoy the speed — you won't want to go back."
+                    "Sxitch lives in your menu bar. Press your hotkey anytime to switch apps.\nEnjoy the speed. You won't want to go back."
                 )
                 .font(.body)
                 .foregroundStyle(.secondary)
