@@ -149,6 +149,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         userState.shared.demoSwitcherVisible = false
     }
 
+    /// True only while the onboarding window is actually on screen. Closing
+    /// the onboarding window mid-run (e.g. with Cmd+W) must restore normal
+    /// summon-hotkey behavior even though "hasCompletedOnboarding" is still
+    /// false at that point.
+    private var onboardingWindowOpen: Bool {
+        NSApp.windows.contains { window in
+            window.identifier?.rawValue == "onboarding" && window.isVisible
+        }
+    }
+
     /// Shows/toggles the real switcher for the onboarding layout demo.
     func showSwitcherWindow() {
         if window.isVisible {
@@ -779,10 +789,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let config = parseModifierConfig()
             let allHeld = modifiersSatisfied(config: config)
             if allHeld, !allModifiersHeldPreviously {
-                // While onboarding is incomplete the summon hotkey drives the
-                // interactive demos: on the layout page it toggles the real
+                // Only while the onboarding window is actually open does the
+                // summon hotkey drive the interactive demos: on the layout
+                // page it toggles the real
                 // switcher, anywhere else it advances the summon-step demo.
-                if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+                if onboardingWindowOpen, !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
                     allModifiersHeldPreviously = false
                     let canToggleDemoSwitcher = userState.shared.layoutDemoActive
                     DispatchQueue.main.async {
@@ -886,7 +897,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let config = parseModifierConfig()
             if modifiersSatisfied(config: config) {
                 // Same onboarding hookup as the modifier-only summon above.
-                if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+                if onboardingWindowOpen && !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
                     let canToggleDemoSwitcher = userState.shared.layoutDemoActive
                     DispatchQueue.main.async {
                         if canToggleDemoSwitcher {
