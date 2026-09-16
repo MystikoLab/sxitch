@@ -77,7 +77,6 @@ struct sxitchApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
-        .defaultPosition(.center)
     }
 }
 

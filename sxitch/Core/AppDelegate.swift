@@ -146,6 +146,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.activeModeID = nil
         appState.drillDownApp = nil
         window.orderOut(nil)
+        userState.shared.demoSwitcherVisible = false
+    }
+
+    /// True only while the onboarding window is actually on screen. Closing
+    /// the onboarding window mid-run (e.g. with Cmd+W) must restore normal
+    /// summon-hotkey behavior even though "hasCompletedOnboarding" is still
+    /// false at that point.
+    private var onboardingWindowOpen: Bool {
+        NSApp.windows.contains { window in
+            window.identifier?.rawValue == "onboarding" && window.isVisible
+        }
+    }
+
+    /// Shows/toggles the real switcher for the onboarding layout demo.
+    func showSwitcherWindow() {
+        if window.isVisible {
+            closeWindow()
+        } else {
+            positionWindow()
+            NotificationCenter.default.post(name: .switcherWillShow, object: nil)
+            userState.shared.demoSwitcherVisible = true
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
+        }
     }
 
     private func toggleMode(_ mode: AppMode) {
@@ -464,6 +488,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.window.orderFrontRegardless()
         }
 
+        NotificationCenter.default.addObserver(
+            forName: .onboardingShowSwitcher, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.showSwitcherWindow()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .onboardingHideSwitcher, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.closeWindow()
+        }
+
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
             selector: #selector(activeAppChanged),
@@ -753,6 +789,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let config = parseModifierConfig()
             let allHeld = modifiersSatisfied(config: config)
             if allHeld, !allModifiersHeldPreviously {
+                // Only while the onboarding window is actually open does the
+                // summon hotkey drive the interactive demos: on the layout
+                // page it toggles the real
+                // switcher, anywhere else it advances the summon-step demo.
+                if onboardingWindowOpen, !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+                    allModifiersHeldPreviously = false
+                    let canToggleDemoSwitcher = userState.shared.layoutDemoActive
+                    DispatchQueue.main.async {
+                        if canToggleDemoSwitcher {
+                            self.showSwitcherWindow()
+                        } else {
+                            NotificationCenter.default.post(name: .onboardingSummonPressed, object: nil)
+                        }
+                    }
+                    return nil
+                }
                 allModifiersHeldPreviously = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     if self.window.isVisible {
@@ -844,6 +896,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if type == .keyDown, savedKeycode != 256, keyCode == Int64(savedKeycode) {
             let config = parseModifierConfig()
             if modifiersSatisfied(config: config) {
+                // Same onboarding hookup as the modifier-only summon above.
+                if onboardingWindowOpen && !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+                    let canToggleDemoSwitcher = userState.shared.layoutDemoActive
+                    DispatchQueue.main.async {
+                        if canToggleDemoSwitcher {
+                            self.showSwitcherWindow()
+                        } else {
+                            NotificationCenter.default.post(name: .onboardingSummonPressed, object: nil)
+                        }
+                    }
+                    return nil
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     if self.window.isVisible {
                         self.closeWindow()
