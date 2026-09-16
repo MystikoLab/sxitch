@@ -13,7 +13,7 @@ import SwiftUI
 /// NSEvent key codes for the default mode shortcuts (Q/H on ANSI layouts).
 private enum ModeKey {
     static let q: UInt16 = 12 // kVK_ANSI_Q
-    static let h: UInt16 = 4  // kVK_ANSI_H
+    static let h: UInt16 = 4 // kVK_ANSI_H
     static let n: UInt16 = 45 // kVK_ANSI_N
 }
 
@@ -162,7 +162,6 @@ struct SummonDemoView: View {
     }
 }
 
-
 /// Reads the current summon hotkey config (same keys the settings picker and
 /// the event tap use) and returns a displayable description.
 @MainActor
@@ -198,7 +197,9 @@ func onboardingSummonHotkey() -> (symbol: String, description: String) {
             keyName = "\(keyName) + \(name)"
         }
     }
-    if keyName.isEmpty { keyName = "Right ⌘"; symbol = "⌘" }
+    if keyName.isEmpty {
+        keyName = "Right ⌘"; symbol = "⌘"
+    }
 
     // Keycap symbol: use the composed modifier symbols, or a mnemonic for the
     // plain key.

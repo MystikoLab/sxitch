@@ -45,7 +45,9 @@ struct OnboardingView: View {
     @State private var nextVisible = false
     @State private var summonStepReady = false
 
-    private var pageIndex: Int { currentPage.rawValue }
+    private var pageIndex: Int {
+        currentPage.rawValue
+    }
 
     let permissionTimer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
 

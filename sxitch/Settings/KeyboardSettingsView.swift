@@ -10,7 +10,6 @@ struct KeyboardSettingsView: View, SettingsTab {
 
     private var usState = userState.shared
 
-
     @State private var overrides: [String: String] = UserDefaults.standard.keyOverrides
     @State private var newOverrideOriginal: String = ""
     @State private var newOverrideTo: String = ""
@@ -135,7 +134,6 @@ struct KeyboardSettingsView: View, SettingsTab {
     }
 }
 
-
 // MARK: - Reusable switcher hotkey picker (settings + onboarding)
 
 struct SwitcherHotkeyPicker: View {
@@ -148,7 +146,8 @@ struct SwitcherHotkeyPicker: View {
     /// different hotkey than the event tap actually listens for.
     @AppStorage("hotkey_keycode") private var keycode: Int = 256
 
-    private func stateFor(family: Int, side: String) -> Int {        for entry in modifierConfig.split(separator: ",") {
+    private func stateFor(family: Int, side: String) -> Int {
+        for entry in modifierConfig.split(separator: ",") {
             let parts = entry.split(separator: ":")
             guard parts.count == 2, let f = Int(parts[0]), f == family else { continue }
             let s = String(parts[1])
@@ -240,47 +239,47 @@ struct SwitcherHotkeyPicker: View {
 
     var body: some View {
         Section("Switcher Hotkey") {
-                VStack(spacing: 5) {
-                    HStack(spacing: 5) {
-                        keyboardKeyView(family: 2, side: "left", width: 110)
-                        Spacer()
-                        keyboardKeyView(family: 2, side: "right", width: 110)
-                    }
-                    HStack(spacing: 5) {
-                        keyboardKeyView(family: 3, side: "left", width: 60)
-                        keyboardKeyView(family: 0, side: "left", width: 60)
-                        keyboardKeyView(family: 1, side: "left", width: 90)
-                        Text("space")
-                            .font(.system(size: 10, weight: .regular))
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .padding(.vertical, 5)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color(nsColor: .controlBackgroundColor))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
-                            )
-                        keyboardKeyView(family: 1, side: "right", width: 90)
-                        keyboardKeyView(family: 0, side: "right", width: 60)
-                    }
+            VStack(spacing: 5) {
+                HStack(spacing: 5) {
+                    keyboardKeyView(family: 2, side: "left", width: 110)
+                    Spacer()
+                    keyboardKeyView(family: 2, side: "right", width: 110)
                 }
+                HStack(spacing: 5) {
+                    keyboardKeyView(family: 3, side: "left", width: 60)
+                    keyboardKeyView(family: 0, side: "left", width: 60)
+                    keyboardKeyView(family: 1, side: "left", width: 90)
+                    Text("space")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color(nsColor: .controlBackgroundColor))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
+                        )
+                    keyboardKeyView(family: 1, side: "right", width: 90)
+                    keyboardKeyView(family: 0, side: "right", width: 60)
+                }
+            }
 
-                SlidingSegmentedPicker(
-                    selection: $keycode,
-                    tint: tint,
-                    options: [
-                        ("None", 256),
-                        ("Space", 49),
-                        ("Tab", 48),
-                        ("Return", 36),
-                    ]
-                )
-                .onAppear {
-                    migrateLegacyModifierConfigIfNeeded()
-                }
+            SlidingSegmentedPicker(
+                selection: $keycode,
+                tint: tint,
+                options: [
+                    ("None", 256),
+                    ("Space", 49),
+                    ("Tab", 48),
+                    ("Return", 36),
+                ]
+            )
+            .onAppear {
+                migrateLegacyModifierConfigIfNeeded()
+            }
         }
     }
 
