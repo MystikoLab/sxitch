@@ -90,7 +90,6 @@ struct WindowPickerCircleLayout: View {
         return (lastRadius + slotSize / 2) * 2
     }
 
-    @ViewBuilder
     private var centerDisc: some View {
         VStack(spacing: 6) {
             Image(nsImage: appIcon)
@@ -151,7 +150,6 @@ struct WindowPickerCircleLayout: View {
         }
     }
 
-    @ViewBuilder
     private func windowTile(_ window: WindowInfo) -> some View {
         VStack(spacing: 4) {
             ZStack(alignment: .topTrailing) {

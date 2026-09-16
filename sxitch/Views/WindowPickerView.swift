@@ -31,7 +31,6 @@ struct WindowPickerView: View {
         }
     }
 
-    @ViewBuilder
     private var windowStack: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
