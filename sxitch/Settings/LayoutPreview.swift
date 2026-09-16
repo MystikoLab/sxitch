@@ -5,6 +5,9 @@ struct LayoutPreviewCard: View {
     let label: String
     let isSelected: Bool
     let onTap: () -> Void
+    /// Accent used for the active slot; defaults to the system accent so the
+    /// settings look unchanged, while onboarding passes whitish.
+    var slotTint: Color = .accentColor
 
     @State private var isHovering = false
     @State private var activeIndex = 0
@@ -102,7 +105,7 @@ struct LayoutPreviewCard: View {
     private var gridPreview: some View {
         HStack(spacing: 4) {
             ForEach(0 ..< 4, id: \.self) { index in
-                QuadSlot(isActive: activeIndex == index && isAnimating)
+                QuadSlot(isActive: activeIndex == index && isAnimating, tint: slotTint)
             }
         }
     }
@@ -110,7 +113,7 @@ struct LayoutPreviewCard: View {
     private var listPreview: some View {
         VStack(spacing: 4) {
             ForEach(0 ..< 3, id: \.self) { index in
-                QuadSlot(isActive: activeIndex == index && isAnimating, isListRow: true)
+                QuadSlot(isActive: activeIndex == index && isAnimating, isListRow: true, tint: slotTint)
             }
         }
     }
@@ -121,7 +124,7 @@ struct LayoutPreviewCard: View {
         return ZStack {
             ForEach(0 ..< count, id: \.self) { index in
                 let angle = (Double(index) / Double(count)) * 2 * .pi - .pi / 2
-                QuadSlot(isActive: activeIndex == index && isAnimating)
+                QuadSlot(isActive: activeIndex == index && isAnimating, tint: slotTint)
                     .offset(
                         x: radius * cos(angle),
                         y: radius * sin(angle)
@@ -136,7 +139,7 @@ struct LayoutPreviewCard: View {
 
             VStack(spacing: 3) {
                 ForEach(0 ..< slotCount, id: \.self) { index in
-                    QuadSlot(isActive: activeIndex == index && isAnimating, isListRow: true, size: 9)
+                    QuadSlot(isActive: activeIndex == index && isAnimating, isListRow: true, size: 9, tint: slotTint)
                 }
             }
             .mask(
@@ -176,6 +179,7 @@ private struct QuadSlot: View {
     let isActive: Bool
     var isListRow = false
     var size: CGFloat? = nil
+    var tint: Color = .accentColor
 
     private var resolvedWidth: CGFloat {
         size ?? (isListRow ? 20 : 14)
@@ -187,7 +191,7 @@ private struct QuadSlot: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: isListRow ? 3 : 4)
-            .fill(isActive ? Color.accentColor : Color.primary.opacity(0.18))
+            .fill(isActive ? tint : Color.primary.opacity(0.18))
             .frame(width: resolvedWidth, height: resolvedHeight)
             .scaleEffect(isActive ? 1.15 : 1)
             .overlay(

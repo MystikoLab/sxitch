@@ -14,6 +14,12 @@ final class userState {
     var isPro: Bool = false
     var isCheckingLicense: Bool = false
 
+    /// Set by the onboarding layout page: while true, the summon hotkey
+    /// toggles the real switcher (demo) instead of being suppressed.
+    var layoutDemoActive = false
+    /// Tracks whether the onboarding demo switcher is currently on screen.
+    var demoSwitcherVisible = false
+
     private init() {}
 
     /// Call this on app launch (e.g., in your App struct's init or .task)

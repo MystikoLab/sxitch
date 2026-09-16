@@ -99,6 +99,7 @@ struct GeneralSettingsView: View, SettingsTab {
                     Button("Open Guide") {
                         hasCompletedOnboarding = false
                         openWindow(id: "onboarding")
+                        NotificationCenter.default.post(name: .onboardingRestarted, object: nil)
                     }
                     .buttonStyle(.bordered)
                 }

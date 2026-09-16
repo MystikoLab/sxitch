@@ -10,148 +10,14 @@ struct KeyboardSettingsView: View, SettingsTab {
 
     private var usState = userState.shared
 
-    @AppStorage("hotkey_modifier_config") private var modifierConfig: String = "1:right"
-    /// 256 == "None" (modifier-only). Must match the value registered in
-    /// AppDelegate.registerDefaultSettings(), otherwise the picker shows a
-    /// different hotkey than the event tap actually listens for.
-    @AppStorage("hotkey_keycode") private var keycode: Int = 256
 
     @State private var overrides: [String: String] = UserDefaults.standard.keyOverrides
     @State private var newOverrideOriginal: String = ""
     @State private var newOverrideTo: String = ""
 
-    private func stateFor(family: Int, side: String) -> Int {
-        for entry in modifierConfig.split(separator: ",") {
-            let parts = entry.split(separator: ":")
-            guard parts.count == 2, let f = Int(parts[0]), f == family else { continue }
-            let s = String(parts[1])
-            if s == side {
-                return 1
-            }
-            if s == "either" {
-                return 2
-            }
-        }
-        return 0
-    }
-
-    private func cycleKey(family: Int, side: String) {
-        let current = stateFor(family: family, side: side)
-        var entries = modifierConfig.split(separator: ",").compactMap { entry -> (Int, String)? in
-            let parts = entry.split(separator: ":")
-            guard parts.count == 2, let f = Int(parts[0]) else { return nil }
-            return (f, String(parts[1]))
-        }
-        entries.removeAll { $0.0 == family }
-        if current == 0 {
-            entries.append((family, side))
-        } else if current == 1 {
-            entries.append((family, "either"))
-        }
-        modifierConfig = entries.map { "\($0.0):\($0.1)" }.joined(separator: ",")
-    }
-
-    private let keyNames: [Int: String] = [0: "Option", 1: "Command", 2: "Shift", 3: "Control"]
-    private let keySymbols: [Int: String] = [0: "⌥", 1: "⌘", 2: "⇧", 3: "⌃"]
-
-    @ViewBuilder
-    private func keyboardKeyView(family: Int, side: String, width: CGFloat? = nil) -> some View {
-        let accent = resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system") ?? .accentColor
-        let stateVal = stateFor(family: family, side: side)
-        let symbol = keySymbols[family] ?? ""
-        let name = keyNames[family] ?? ""
-        let modeText: String = {
-            switch stateVal {
-            case 0: return "off"
-            case 1: return side == "left" ? "◀" : "▶"
-            case 2: return "⇔"
-            default: return ""
-            }
-        }()
-        Button {
-            cycleKey(family: family, side: side)
-        } label: {
-            VStack(spacing: 0) {
-                Text(symbol)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                Text(name)
-                    .font(.system(size: 8, weight: .medium))
-                    .lineLimit(1)
-                Text(modeText)
-                    .font(.system(size: 7, weight: .bold))
-                    .lineLimit(1)
-                    .opacity(stateVal == 0 ? 0.35 : 1)
-                    .padding(.top, 1)
-            }
-            .frame(minHeight: 44)
-            .frame(maxWidth: width == nil ? .infinity : width)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(stateVal == 0 ? Color(nsColor: .controlBackgroundColor) :
-                        stateVal == 1 ? accent :
-                        accent.opacity(0.12))
-            )
-            .foregroundColor(stateVal == 0 ? .primary :
-                stateVal == 1 ? .white :
-                accent)
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(stateVal == 0 ? Color(nsColor: .separatorColor).opacity(0.6) :
-                        stateVal == 1 ? accent :
-                        accent.opacity(0.6),
-                        lineWidth: stateVal == 0 ? 0.5 : 2)
-            )
-        }
-        .buttonStyle(.plain)
-        .help(stateVal == 0 ? "\(name): off" :
-            stateVal == 1 ? "\(name): \(side) only" :
-            "\(name): either")
-    }
-
     var body: some View {
         Form {
-            Section("Switcher Hotkey") {
-                VStack(spacing: 5) {
-                    HStack(spacing: 5) {
-                        keyboardKeyView(family: 2, side: "left", width: 110)
-                        Spacer()
-                        keyboardKeyView(family: 2, side: "right", width: 110)
-                    }
-                    HStack(spacing: 5) {
-                        keyboardKeyView(family: 3, side: "left", width: 60)
-                        keyboardKeyView(family: 0, side: "left", width: 60)
-                        keyboardKeyView(family: 1, side: "left", width: 90)
-                        Text("space")
-                            .font(.system(size: 10, weight: .regular))
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .padding(.vertical, 5)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color(nsColor: .controlBackgroundColor))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
-                            )
-                        keyboardKeyView(family: 1, side: "right", width: 90)
-                        keyboardKeyView(family: 0, side: "right", width: 60)
-                    }
-                }
-
-                SlidingSegmentedPicker(
-                    selection: $keycode,
-                    options: [
-                        ("None", 256),
-                        ("Space", 49),
-                        ("Tab", 48),
-                        ("Return", 36),
-                    ]
-                )
-            }
+            SwitcherHotkeyPicker(tint: resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system") ?? .accentColor)
             Section("Mode Hotkeys") {
                 HStack {
                     Text("Hide mode")
@@ -252,8 +118,169 @@ struct KeyboardSettingsView: View, SettingsTab {
         }
         .padding()
         .formStyle(.grouped)
-        .onAppear {
-            migrateLegacyModifierConfigIfNeeded()
+    }
+
+    private func addOverride() {
+        let original = newOverrideOriginal.trimmingCharacters(in: .whitespaces).lowercased()
+        let override = newOverrideTo.trimmingCharacters(in: .whitespaces).lowercased()
+        guard original.count == 1, !override.isEmpty, original != override else { return }
+        overrides[original] = override
+        saveOverrides()
+        newOverrideOriginal = ""
+        newOverrideTo = ""
+    }
+
+    private func saveOverrides() {
+        UserDefaults.standard.keyOverrides = overrides
+    }
+}
+
+
+// MARK: - Reusable switcher hotkey picker (settings + onboarding)
+
+struct SwitcherHotkeyPicker: View {
+    /// Accent for active keys; onboarding passes whitish to avoid the system accent.
+    var tint: Color
+
+    @AppStorage("hotkey_modifier_config") private var modifierConfig: String = "1:right"
+    /// 256 == "None" (modifier-only). Must match the value registered in
+    /// AppDelegate.registerDefaultSettings(), otherwise the picker shows a
+    /// different hotkey than the event tap actually listens for.
+    @AppStorage("hotkey_keycode") private var keycode: Int = 256
+
+    private func stateFor(family: Int, side: String) -> Int {        for entry in modifierConfig.split(separator: ",") {
+            let parts = entry.split(separator: ":")
+            guard parts.count == 2, let f = Int(parts[0]), f == family else { continue }
+            let s = String(parts[1])
+            if s == side {
+                return 1
+            }
+            if s == "either" {
+                return 2
+            }
+        }
+        return 0
+    }
+
+    private func cycleKey(family: Int, side: String) {
+        let current = stateFor(family: family, side: side)
+        var entries = modifierConfig.split(separator: ",").compactMap { entry -> (Int, String)? in
+            let parts = entry.split(separator: ":")
+            guard parts.count == 2, let f = Int(parts[0]) else { return nil }
+            return (f, String(parts[1]))
+        }
+        entries.removeAll { $0.0 == family }
+        if current == 0 {
+            entries.append((family, side))
+        } else if current == 1 {
+            entries.append((family, "either"))
+        }
+        modifierConfig = entries.map { "\($0.0):\($0.1)" }.joined(separator: ",")
+    }
+
+    private let keyNames: [Int: String] = [0: "Option", 1: "Command", 2: "Shift", 3: "Control"]
+    private let keySymbols: [Int: String] = [0: "⌥", 1: "⌘", 2: "⇧", 3: "⌃"]
+
+    @ViewBuilder
+    private func keyboardKeyView(family: Int, side: String, width: CGFloat? = nil) -> some View {
+        let accent = tint
+        let stateVal = stateFor(family: family, side: side)
+        let symbol = keySymbols[family] ?? ""
+        let name = keyNames[family] ?? ""
+        let modeText: String = {
+            switch stateVal {
+            case 0: return "off"
+            case 1: return side == "left" ? "◀" : "▶"
+            case 2: return "⇔"
+            default: return ""
+            }
+        }()
+        Button {
+            cycleKey(family: family, side: side)
+        } label: {
+            VStack(spacing: 0) {
+                Text(symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                Text(name)
+                    .font(.system(size: 8, weight: .medium))
+                    .lineLimit(1)
+                Text(modeText)
+                    .font(.system(size: 7, weight: .bold))
+                    .lineLimit(1)
+                    .opacity(stateVal == 0 ? 0.35 : 1)
+                    .padding(.top, 1)
+            }
+            .frame(minHeight: 44)
+            .frame(maxWidth: width == nil ? .infinity : width)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(stateVal == 0 ? Color(nsColor: .controlBackgroundColor) :
+                        stateVal == 1 ? accent :
+                        accent.opacity(0.12))
+            )
+            .foregroundColor(stateVal == 0 ? .primary :
+                stateVal == 1 ? (tint == .white ? Color.black : Color.white) :
+                accent)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(stateVal == 0 ? Color(nsColor: .separatorColor).opacity(0.6) :
+                        stateVal == 1 ? accent :
+                        accent.opacity(0.6),
+                        lineWidth: stateVal == 0 ? 0.5 : 2)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(stateVal == 0 ? "\(name): off" :
+            stateVal == 1 ? "\(name): \(side) only" :
+            "\(name): either")
+    }
+
+    var body: some View {
+        Section("Switcher Hotkey") {
+                VStack(spacing: 5) {
+                    HStack(spacing: 5) {
+                        keyboardKeyView(family: 2, side: "left", width: 110)
+                        Spacer()
+                        keyboardKeyView(family: 2, side: "right", width: 110)
+                    }
+                    HStack(spacing: 5) {
+                        keyboardKeyView(family: 3, side: "left", width: 60)
+                        keyboardKeyView(family: 0, side: "left", width: 60)
+                        keyboardKeyView(family: 1, side: "left", width: 90)
+                        Text("space")
+                            .font(.system(size: 10, weight: .regular))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .padding(.vertical, 5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color(nsColor: .controlBackgroundColor))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
+                            )
+                        keyboardKeyView(family: 1, side: "right", width: 90)
+                        keyboardKeyView(family: 0, side: "right", width: 60)
+                    }
+                }
+
+                SlidingSegmentedPicker(
+                    selection: $keycode,
+                    tint: tint,
+                    options: [
+                        ("None", 256),
+                        ("Space", 49),
+                        ("Tab", 48),
+                        ("Return", 36),
+                    ]
+                )
+                .onAppear {
+                    migrateLegacyModifierConfigIfNeeded()
+                }
         }
     }
 
@@ -298,26 +325,12 @@ struct KeyboardSettingsView: View, SettingsTab {
             }
         }
     }
-
-    private func addOverride() {
-        let original = newOverrideOriginal.trimmingCharacters(in: .whitespaces).lowercased()
-        let override = newOverrideTo.trimmingCharacters(in: .whitespaces).lowercased()
-        guard original.count == 1, !override.isEmpty, original != override else { return }
-        overrides[original] = override
-        saveOverrides()
-        newOverrideOriginal = ""
-        newOverrideTo = ""
-    }
-
-    private func saveOverrides() {
-        UserDefaults.standard.keyOverrides = overrides
-    }
 }
 
 struct SlidingSegmentedPicker: View {
     @Binding var selection: Int
+    var tint: Color = .accentColor
     let options: [(label: String, value: Int)]
-
     @State private var segmentFrames: [Int: CGRect] = [:]
 
     private struct FramePreferenceKey: PreferenceKey {
@@ -332,7 +345,7 @@ struct SlidingSegmentedPicker: View {
             // Sliding highlight
             if let frame = segmentFrames[selection] {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.accentColor)
+                    .fill(tint)
                     .frame(width: frame.width, height: frame.height)
                     .offset(x: frame.minX, y: 0)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selection)
@@ -340,11 +353,12 @@ struct SlidingSegmentedPicker: View {
 
             HStack(spacing: 0) {
                 ForEach(options, id: \.value) { option in
+                    let isActive = selection == option.value
                     Text(option.label)
                         .font(.system(size: 12, weight: .medium))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .foregroundColor(selection == option.value ? .white : .primary)
+                        .foregroundColor(isActive ? (tint == .white ? Color.black : Color.white) : .primary)
                         .contentShape(Rectangle())
                         .background(
                             GeometryReader { geo in

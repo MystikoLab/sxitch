@@ -34,4 +34,8 @@ extension Notification.Name {
     static let appSettingsChanged = Notification.Name("appSettingsChanged")
     static let customModesChanged = Notification.Name("sxitch.customModesChanged")
     static let appRenamesChanged = Notification.Name("sxitch.appRenamesChanged")
+    static let onboardingRestarted = Notification.Name("sxitch.onboardingRestarted")
+    static let onboardingSummonPressed = Notification.Name("sxitch.onboardingSummonPressed")
+    static let onboardingShowSwitcher = Notification.Name("sxitch.onboardingShowSwitcher")
+    static let onboardingHideSwitcher = Notification.Name("sxitch.onboardingHideSwitcher")
 }

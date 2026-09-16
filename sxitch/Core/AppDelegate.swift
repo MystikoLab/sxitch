@@ -146,6 +146,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.activeModeID = nil
         appState.drillDownApp = nil
         window.orderOut(nil)
+        userState.shared.demoSwitcherVisible = false
+    }
+
+    /// Shows/toggles the real switcher for the onboarding layout demo.
+    func showSwitcherWindow() {
+        if window.isVisible {
+            closeWindow()
+        } else {
+            positionWindow()
+            NotificationCenter.default.post(name: .switcherWillShow, object: nil)
+            userState.shared.demoSwitcherVisible = true
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
+        }
     }
 
     private func toggleMode(_ mode: AppMode) {
@@ -464,6 +478,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.window.orderFrontRegardless()
         }
 
+        NotificationCenter.default.addObserver(
+            forName: .onboardingShowSwitcher, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.showSwitcherWindow()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .onboardingHideSwitcher, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.closeWindow()
+        }
+
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
             selector: #selector(activeAppChanged),
@@ -753,6 +779,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let config = parseModifierConfig()
             let allHeld = modifiersSatisfied(config: config)
             if allHeld, !allModifiersHeldPreviously {
+                // While onboarding is incomplete the summon hotkey drives the
+                // interactive demos: on the layout page it toggles the real
+                // switcher, anywhere else it advances the summon-step demo.
+                if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+                    allModifiersHeldPreviously = false
+                    let canToggleDemoSwitcher = userState.shared.layoutDemoActive
+                    DispatchQueue.main.async {
+                        if canToggleDemoSwitcher {
+                            self.showSwitcherWindow()
+                        } else {
+                            NotificationCenter.default.post(name: .onboardingSummonPressed, object: nil)
+                        }
+                    }
+                    return nil
+                }
                 allModifiersHeldPreviously = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     if self.window.isVisible {
@@ -844,6 +885,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if type == .keyDown, savedKeycode != 256, keyCode == Int64(savedKeycode) {
             let config = parseModifierConfig()
             if modifiersSatisfied(config: config) {
+                // Same onboarding hookup as the modifier-only summon above.
+                if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+                    let canToggleDemoSwitcher = userState.shared.layoutDemoActive
+                    DispatchQueue.main.async {
+                        if canToggleDemoSwitcher {
+                            self.showSwitcherWindow()
+                        } else {
+                            NotificationCenter.default.post(name: .onboardingSummonPressed, object: nil)
+                        }
+                    }
+                    return nil
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     if self.window.isVisible {
                         self.closeWindow()
