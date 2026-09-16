@@ -4,10 +4,10 @@ struct LayoutPreviewCard: View {
     let style: String
     let label: String
     let isSelected: Bool
-    let onTap: () -> Void
     /// Accent used for the active slot; defaults to the system accent so the
     /// settings look unchanged, while onboarding passes whitish.
     var slotTint: Color = .accentColor
+    let onTap: () -> Void
 
     @State private var isHovering = false
     @State private var activeIndex = 0

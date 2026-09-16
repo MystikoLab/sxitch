@@ -490,7 +490,9 @@ struct HotkeySetupPage: View {
 struct TutorialBasicsPage: View {
     var summonPressed: Bool = false
 
-    private var hotkey = onboardingSummonHotkey()
+    private var hotkey: (symbol: String, description: String) {
+        onboardingSummonHotkey()
+    }
 
     var body: some View {
         VStack(spacing: 18) {
