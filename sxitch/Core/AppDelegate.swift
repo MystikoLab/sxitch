@@ -235,16 +235,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.resizeWindowToFit(force: true)
                 }
             } else {
-                // Hidden: set the mode *before* showing so the panel renders its final
-                // content and size off-screen, then reveal it once — no flicker.
-                self.appState.activeModeID = id
-                self.appState.typed = ""
-                self.appState.depth = 0
-                DispatchQueue.main.async {
+                // Hidden: swap content while the panel is transparent, then size and show
+                // it only after SwiftUI has committed the new layout — the first visible
+                // frame is always the final custom-mode content.
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    self.appState.activeModeID = id
+                    self.appState.typed = ""
+                    self.appState.depth = 0
+                }
+                self.window.alphaValue = 0
+                self.window.orderFrontRegardless()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0 / 60.0) {
+                    // A fast toggle may have closed or replaced the mode in the meantime.
+                    guard self.appState.activeModeID == id, self.window.isVisible else {
+                        self.window.alphaValue = 1
+                        return
+                    }
                     self.resizeWindowToFit(force: true)
                     self.positionWindow()
                     NotificationCenter.default.post(name: .switcherWillShow, object: nil)
-                    self.window.orderFrontRegardless()
+                    self.window.alphaValue = 1
                 }
             }
         }

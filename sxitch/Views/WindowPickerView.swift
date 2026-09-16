@@ -18,6 +18,20 @@ struct WindowPickerView: View {
     }
 
     var body: some View {
+        if layoutStyle == "circle" {
+            WindowPickerCircleLayout(
+                windows: filtered,
+                appName: appName,
+                appIcon: appIcon,
+                typed: typed,
+                onSelect: onSelect
+            )
+        } else {
+            windowStack
+        }
+    }
+
+    private var windowStack: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Image(nsImage: appIcon)
