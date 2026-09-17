@@ -18,6 +18,12 @@ struct sxitchApp: App {
             Label {
                 if appState.isPro {
                     Text("Sxitch Pro")
+                } else if appState.isTrialActive {
+                    Button("Sxitch Trial · \(appState.trialDaysRemaining) days left") {
+                        if let url = URL(string: "https://sxitch.app") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
                 } else {
                     Button("Sxitch Free") {
                         if let url = URL(string: "https://sxitch.app") {

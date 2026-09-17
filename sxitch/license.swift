@@ -181,7 +181,7 @@ func deleteCredentials() throws {
 
 // MARK: - Low-Level Keychain Operations
 
-private func saveKeychainSecret(account: String, secret: String) throws {
+func saveKeychainSecret(account: String, secret: String) throws {
     guard let data = secret.data(withAllowedCharacters: .utf8) else {
         throw KeychainError.conversionError
     }
@@ -202,7 +202,7 @@ private func saveKeychainSecret(account: String, secret: String) throws {
     }
 }
 
-private func readKeychainSecret(account: String) throws -> String {
+func readKeychainSecret(account: String) throws -> String {
     let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
         kSecAttrService as String: APP_NAME,

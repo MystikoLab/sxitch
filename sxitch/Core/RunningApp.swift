@@ -73,7 +73,7 @@ struct RunningApp: SwitchableApp, Equatable {
         return deduped
             .filter { app in
                 app.app.activationPolicy == .regular
-                    && (!blacklist.contains(app.appName.lowercased()) || !usState.isPro)
+                    && (!blacklist.contains(app.appName.lowercased()) || !usState.hasFullAccess)
             }
             .sorted { $0.appName < $1.appName }
     }

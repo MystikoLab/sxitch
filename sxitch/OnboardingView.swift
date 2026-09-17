@@ -722,34 +722,103 @@ struct LicensePage: View {
     @State private var isActivating = false
     @State private var errorMessage: String?
     @State private var justActivated = false
-    @State private var skipVisible = false
+    @State private var justStartedTrial = false
+    @State private var showingKeyEntry = false
+
+    private var showsConfirmation: Bool {
+        justActivated || justStartedTrial || appState.hasFullAccess
+    }
 
     var body: some View {
         VStack(spacing: 18) {
-            if justActivated {
-                activatedContent
+            if showsConfirmation {
+                confirmationContent
+            } else if showingKeyEntry {
+                keyEntryContent
             } else {
-                offerContent
-                skipContent
+                choiceContent
             }
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
-            // Skip appears after a short beat so the offer gets a fair look first.
-            try? await Task.sleep(for: .seconds(1.2))
-            withAnimation(.easeOut(duration: 0.3)) {
-                skipVisible = true
-            }
-        }
+        .animation(.easeOut(duration: 0.3), value: showingKeyEntry)
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: showsConfirmation)
     }
 
-    // MARK: Offer state
+    // MARK: Choice state
 
-    private var offerContent: some View {
+    private var choiceContent: some View {
         VStack(spacing: 16) {
             VStack(spacing: 8) {
-                Text("Activate License Key")
+                Text("Choose Your Sxitch")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+
+                Text("Try everything Pro has to offer, unlock it with a key, or keep the free version. You can always change this later in Settings.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 440)
+            }
+
+            VStack(spacing: 10) {
+                Button {
+                    appState.startTrial()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                        justStartedTrial = true
+                    }
+                } label: {
+                    VStack(spacing: 3) {
+                        Text("Start 14-Day Pro Trial")
+                            .font(.headline)
+                        Text("All Pro features free for 14 days. No card required.")
+                            .font(.caption)
+                            .opacity(0.7)
+                    }
+                    .frame(maxWidth: 380)
+                }
+                .buttonStyle(WhitishProminentStyle())
+
+                Button {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        showingKeyEntry = true
+                    }
+                } label: {
+                    VStack(spacing: 3) {
+                        Text("Enter Activation Key")
+                            .font(.headline)
+                        Text("Already purchased? Unlock Pro with your license key.")
+                            .font(.caption)
+                            .opacity(0.7)
+                    }
+                    .frame(maxWidth: 380)
+                }
+                .buttonStyle(WhitishOutlineStyle())
+
+                Button {
+                    onSkip()
+                } label: {
+                    VStack(spacing: 3) {
+                        Text("Use in Free Mode")
+                            .font(.headline)
+                        Text("Core switching features stay free, forever.")
+                            .font(.caption)
+                            .opacity(0.7)
+                    }
+                    .frame(maxWidth: 380)
+                }
+                .buttonStyle(WhitishGhostStyle())
+            }
+        }
+        .transition(.opacity)
+    }
+
+    // MARK: Key entry state
+
+    private var keyEntryContent: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 8) {
+                Text("Enter Activation Key")
                     .font(.largeTitle)
                     .fontWeight(.bold)
 
@@ -771,7 +840,7 @@ struct LicensePage: View {
                         HStack(spacing: 8) {
                             ProgressView()
                                 .controlSize(.small)
-                            Text("Activating…")
+                            Text("Activating")
                         }
                     } else {
                         Text("Activate")
@@ -781,7 +850,15 @@ struct LicensePage: View {
                 .disabled(
                     licenseKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isActivating
                 )
+            }
 
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            HStack(spacing: 12) {
                 Button {
                     if let url = URL(string: "https://sxitch.app/#pricing") {
                         NSWorkspace.shared.open(url)
@@ -790,20 +867,30 @@ struct LicensePage: View {
                     Text("Get Pro")
                 }
                 .buttonStyle(WhitishOutlineStyle())
-            }
 
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                Button {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        showingKeyEntry = false
+                    }
+                } label: {
+                    Text("Back to Options")
+                }
+                .buttonStyle(WhitishGhostStyle())
+
+                Button {
+                    onSkip()
+                } label: {
+                    Text("Skip")
+                }
+                .buttonStyle(WhitishGhostStyle())
             }
         }
         .transition(.opacity)
     }
 
-    // MARK: Activated state
+    // MARK: Confirmation state
 
-    private var activatedContent: some View {
+    private var confirmationContent: some View {
         VStack(spacing: 18) {
             ZStack {
                 ConfettiBurst(tint: accent)
@@ -812,13 +899,23 @@ struct LicensePage: View {
             .frame(height: 100)
 
             VStack(spacing: 8) {
-                Text("You're Pro! 🎉")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                if justActivated || appState.isPro {
+                    Text("You're Pro! 🎉")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
 
-                Text("Thank you for supporting Sxitch's development.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
+                    Text("Thank you for supporting Sxitch's development.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Trial Started! 🎉")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+
+                    Text("All Pro features are unlocked for the next \(userState.trialLengthDays) days. Enjoy!")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Button("Continue") {
@@ -827,19 +924,6 @@ struct LicensePage: View {
             .buttonStyle(WhitishProminentStyle())
         }
         .transition(.scale(scale: 0.9).combined(with: .opacity))
-    }
-
-    // MARK: Skip
-
-    @ViewBuilder
-    private var skipContent: some View {
-        if skipVisible {
-            Button("Skip") {
-                onSkip()
-            }
-            .buttonStyle(WhitishGhostStyle())
-            .animation(.easeOut(duration: 0.4), value: skipVisible)
-        }
     }
 
     // MARK: Actions
@@ -856,7 +940,6 @@ struct LicensePage: View {
                 licenseKey = ""
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                     justActivated = true
-                    skipVisible = true
                 }
             } else {
                 errorMessage = "Invalid license key or activation limit reached."
@@ -900,7 +983,13 @@ struct FinishPage: View {
             }
 
             HStack(spacing: 12) {
-                if !userState.shared.isPro {
+                if userState.shared.isPro {
+                    // Nothing extra to upsell for licensed users.
+                } else if userState.shared.isTrialActive {
+                    Text("\(userState.shared.trialDaysRemaining) days of Pro left")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
                     Link(destination: URL(string: "https://sxitch.app/#pricing")!) {
                         Label("Get Sxitch Pro", systemImage: "star.fill")
                     }

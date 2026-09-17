@@ -18,7 +18,7 @@ struct SettingsView: View {
             if tab.id == "activate" {
                 AnySettingsTab(
                     id: tab.id, title: tab.title,
-                    icon: usState.isPro ? "lock.open" : "lock",
+                    icon: usState.hasFullAccess ? "lock.open" : "lock",
                     content: tab.content
                 )
             } else {

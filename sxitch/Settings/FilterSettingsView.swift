@@ -17,7 +17,7 @@ struct FilterSettingsView: View, SettingsTab {
 
     var body: some View {
         Form {
-            if appState.isPro {
+            if appState.hasFullAccess {
                 ManagedListSection(
                     addHeader: "Blacklist Apps",
                     listHeader: "Blacklisted Apps",
@@ -34,7 +34,7 @@ struct FilterSettingsView: View, SettingsTab {
                 items: $prefixStrip
             )
             Section("App name override") {
-                if !appState.isPro {
+                if !appState.hasFullAccess {
                     HStack {
                         Label("Pro", systemImage: "lock.fill")
                             .font(.caption)
@@ -49,12 +49,12 @@ struct FilterSettingsView: View, SettingsTab {
                 HStack {
                     TextField("Old name", text: $newAppRename)
                         .textFieldStyle(.roundedBorder)
-                        .disabled(!appState.isPro)
+                        .disabled(!appState.hasFullAccess)
                     TextField("New name", text: $newAppRenameTo)
                         .textFieldStyle(.roundedBorder)
-                        .disabled(!appState.isPro)
+                        .disabled(!appState.hasFullAccess)
                     Button("Add", systemImage: "plus") { addAppRename() }
-                        .disabled(!appState.isPro || newAppRename.trimmingCharacters(in: .whitespaces).isEmpty || newAppRenameTo.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(!appState.hasFullAccess || newAppRename.trimmingCharacters(in: .whitespaces).isEmpty || newAppRenameTo.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
 
                 if appRenames.isEmpty {
@@ -84,7 +84,7 @@ struct FilterSettingsView: View, SettingsTab {
                                 Image(systemName: "trash")
                             }
                             .buttonStyle(.borderless)
-                            .disabled(!appState.isPro)
+                            .disabled(!appState.hasFullAccess)
                         }
                         .padding(.vertical, 2)
                     }

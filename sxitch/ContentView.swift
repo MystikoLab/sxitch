@@ -288,7 +288,7 @@ struct ContentView: View {
         let windowPickerEnabled = UserDefaults.standard.bool(forKey: "windowPickerEnabled")
         let currentMode = appState.mode
 
-        if windows.count > 1, userState.shared.isPro, windowPickerEnabled {
+        if windows.count > 1, userState.shared.hasFullAccess, windowPickerEnabled {
             appState.drillDownApp = runningApp
         } else if windows.count == 1 {
             let theme = ModeTheme.theme(for: currentMode)

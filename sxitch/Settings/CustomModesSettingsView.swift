@@ -9,11 +9,11 @@ struct CustomModesSettingsView: View {
     private var usState = userState.shared
 
     private var atLimit: Bool {
-        !usState.isPro && modes.count >= CustomModeStore.freeModeLimit
+        !usState.hasFullAccess && modes.count >= CustomModeStore.freeModeLimit
     }
 
     private var canAdd: Bool {
-        usState.isPro || modes.count < CustomModeStore.freeModeLimit
+        usState.hasFullAccess || modes.count < CustomModeStore.freeModeLimit
     }
 
     var body: some View {

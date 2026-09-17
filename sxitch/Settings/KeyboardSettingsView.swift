@@ -22,21 +22,21 @@ struct KeyboardSettingsView: View, SettingsTab {
                     Text("Hide mode")
                     Spacer()
                     KeyboardShortcuts.Recorder(for: .hideMode)
-                        .disabled(!usState.isPro)
+                        .disabled(!usState.hasFullAccess)
                 }
                 HStack {
                     Text("Quit mode")
                     Spacer()
                     KeyboardShortcuts.Recorder(for: .quitMode)
-                        .disabled(!usState.isPro)
+                        .disabled(!usState.hasFullAccess)
                 }
                 HStack {
                     Text("Normal mode")
                     Spacer()
                     KeyboardShortcuts.Recorder(for: .normalMode)
-                        .disabled(!usState.isPro)
+                        .disabled(!usState.hasFullAccess)
                 }
-                if !usState.isPro {
+                if !usState.hasFullAccess {
                     HStack {
                         Label("Pro", systemImage: "lock.fill")
                             .font(.caption)
@@ -50,7 +50,7 @@ struct KeyboardSettingsView: View, SettingsTab {
             }
             AppHotkeySettingsView()
             Section("Key Overrides") {
-                if !usState.isPro {
+                if !usState.hasFullAccess {
                     HStack {
                         Label("Pro", systemImage: "lock.fill")
                             .font(.caption)
@@ -65,12 +65,12 @@ struct KeyboardSettingsView: View, SettingsTab {
                 HStack {
                     TextField("Original", text: $newOverrideOriginal)
                         .textFieldStyle(.roundedBorder)
-                        .disabled(!usState.isPro)
+                        .disabled(!usState.hasFullAccess)
                     TextField("Override", text: $newOverrideTo)
                         .textFieldStyle(.roundedBorder)
-                        .disabled(!usState.isPro)
+                        .disabled(!usState.hasFullAccess)
                     Button("Add", systemImage: "plus") { addOverride() }
-                        .disabled(!usState.isPro || newOverrideOriginal.trimmingCharacters(in: .whitespaces).count != 1 || newOverrideTo.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(!usState.hasFullAccess || newOverrideOriginal.trimmingCharacters(in: .whitespaces).count != 1 || newOverrideTo.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
 
                 if overrides.isEmpty {
@@ -108,7 +108,7 @@ struct KeyboardSettingsView: View, SettingsTab {
                                 Image(systemName: "trash")
                             }
                             .buttonStyle(.borderless)
-                            .disabled(!usState.isPro)
+                            .disabled(!usState.hasFullAccess)
                         }
                         .padding(.vertical, 2)
                     }
