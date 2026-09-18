@@ -53,13 +53,18 @@ struct RunningApp: SwitchableApp, Equatable {
                 return app
             }
 
+        let filtered = processed.filter { app in
+            app.app.activationPolicy == .regular
+                && (!blacklist.contains(app.appName.lowercased()) || !usState.isPro)
+        }
+
         var nameCounts: [String: Int] = [:]
-        for app in processed {
+        for app in filtered {
             nameCounts[app.appName.lowercased(), default: 0] += 1
         }
 
         var nameCounters: [String: Int] = [:]
-        let deduped = processed.map { app -> RunningApp in
+        let deduped = filtered.map { app -> RunningApp in
             var app = app
             let key = app.appName.lowercased()
             if nameCounts[key]! > 1 {
@@ -70,12 +75,7 @@ struct RunningApp: SwitchableApp, Equatable {
             return app
         }
 
-        return deduped
-            .filter { app in
-                app.app.activationPolicy == .regular
-                    && (!blacklist.contains(app.appName.lowercased()) || !usState.isPro)
-            }
-            .sorted { $0.appName < $1.appName }
+        return deduped.sorted { $0.appName < $1.appName }
     }
 
     func performAction(action: AppMode) {
