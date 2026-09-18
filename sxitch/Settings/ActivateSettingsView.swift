@@ -39,12 +39,42 @@ struct ActivateSettingsView: View, SettingsTab {
                     Button("Deactivate Device", role: .destructive) {
                         deactivateLicense()
                     }
+                } else if appState.isTrialActive {
+                    HStack {
+                        Image(systemName: "hourglass.bottom.filled.tentpath")
+                            .foregroundColor(.blue)
+                            .imageScale(.large)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Pro Trial Active")
+                                .font(.headline)
+                            Text(
+                                "\(appState.trialDaysRemaining) of \(userState.trialLengthDays) days remaining. All Pro features are unlocked."
+                            )
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
                 } else {
                     HStack {
-                        Image(systemName: "xmark.seal.fill")
+                        Image(systemName: appState.isTrialExpired ? "clock.badge.xmark" : "xmark.seal.fill")
                             .foregroundColor(.secondary)
-                        Text("Free Version")
-                            .font(.headline)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(appState.isTrialExpired ? "Free Version (Trial Ended)" : "Free Version")
+                                .font(.headline)
+                            if appState.isTrialExpired {
+                                Text("Your 14-day Pro trial has ended.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    if !appState.hasTrialEverStarted {
+                        Button {
+                            appState.startTrial()
+                        } label: {
+                            Label("Start 14-Day Free Trial", systemImage: "clock.badge.checkmark")
+                        }
                     }
                 }
             }

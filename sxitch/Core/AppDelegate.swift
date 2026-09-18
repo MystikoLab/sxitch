@@ -173,7 +173,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func toggleMode(_ mode: AppMode) {
-        guard window.isVisible, proState.isPro else {
+        guard window.isVisible, proState.hasFullAccess else {
             closeWindow()
             let alert = NSAlert()
             alert.messageText = "Hide and Quit modes are disabled"
@@ -215,7 +215,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // App-launch hotkeys are Pro-only. The handler is registered regardless so the
             // shortcut stays claimed and survives the async licence check, but it only acts
             // once a licence is present.
-            guard let self, self.proState.isPro else { return }
+            guard let self, self.proState.hasFullAccess else { return }
             guard let url = URL(string: bundleURL) else { return }
             let config = NSWorkspace.OpenConfiguration()
             config.activates = true
@@ -225,7 +225,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func registerModeHotkeys() {
         let modes = CustomModeStore.load()
-        let eligible = proState.isPro
+        let eligible = proState.hasFullAccess
             ? modes
             : Array(modes.prefix(CustomModeStore.freeModeLimit))
         let eligibleIDs = Set(eligible.map { $0.id.uuidString })
@@ -354,7 +354,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if appState.mode == .normal {
                     closeWindow()
                 }
-            } else if windows.count > 1, proState.isPro, windowPickerEnabled {
+            } else if windows.count > 1, proState.hasFullAccess, windowPickerEnabled {
                 appState.drillDownApp = running
             } else {
                 theme.appAction(entry)
@@ -442,6 +442,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_: Notification) {
+        proState.beginTrialIfNeeded()
+
         window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 0, height: 0),
             styleMask: [.borderless, .fullSizeContentView, .nonactivatingPanel],
@@ -834,7 +836,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let letter = typedCharacter(from: event) {
                 let raw = String(letter)
                 let pickerChar: String
-                if proState.isPro {
+                if proState.hasFullAccess {
                     let overrides = UserDefaults.standard.keyOverrides
                     pickerChar = overrides[raw] ?? raw
                 } else {

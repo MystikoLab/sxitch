@@ -91,15 +91,15 @@ struct ThemeSettingsView: View, SettingsTab {
                 Toggle("Show picker UI", isOn: $showUi)
                 HStack {
                     Toggle("Window Picker", isOn: $windowPickerEnabled)
-                        .disabled(!usState.isPro)
-                    if !usState.isPro {
+                        .disabled(!usState.hasFullAccess)
+                    if !usState.hasFullAccess {
                         Spacer()
                         Label("Pro", systemImage: "lock.fill")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                if !usState.isPro {
+                if !usState.hasFullAccess {
                     Text("Upgrade to Pro to pick individual windows when an app has multiple open.")
                         .font(.caption)
                         .foregroundStyle(.secondary)

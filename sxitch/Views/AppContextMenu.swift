@@ -35,7 +35,7 @@ extension SwitchableApp {
 extension View {
     @ViewBuilder
     func appContextMenu(for app: any SwitchableApp) -> some View {
-        if userState.shared.isPro, app.runningApplication != nil || app.isPinned {
+        if userState.shared.hasFullAccess, app.runningApplication != nil || app.isPinned {
             modifier(AppContextMenuModifier(app: app))
         } else {
             self
