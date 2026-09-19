@@ -40,6 +40,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let familyLeftCodes: [Int] = [58, 55, 56, 59, 57]
     let familyRightCodes: [Int] = [61, 54, 60, 62, 57]
 
+    private func windowConfig() {
+        window.level = NSWindow.Level(NSWindow.Level.floating.rawValue + 200)
+
+        window.collectionBehavior = [
+            .canJoinAllSpaces,
+            .stationary,
+            .fullScreenAuxiliary,
+        ]
+    }
+
     private func parseModifierConfig() -> [(family: Int, side: String)] {
         let str = UserDefaults.standard.string(forKey: "hotkey_modifier_config") ?? ""
         if str.isEmpty {
@@ -164,6 +174,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if window.isVisible {
             closeWindow()
         } else {
+            windowConfig()
             positionWindow()
             NotificationCenter.default.post(name: .switcherWillShow, object: nil)
             userState.shared.demoSwitcherVisible = true
@@ -452,9 +463,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.isOpaque = false
         resizeWindowToFit()
         window.backgroundColor = .clear
-        window.level = NSWindow.Level(NSWindow.Level.floating.rawValue + 200)
         window.isMovableByWindowBackground = true
-        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+
+        windowConfig()
 
         let contentView = NSHostingView(
             rootView: ContentView(appState: appState, appDelegate: self)
