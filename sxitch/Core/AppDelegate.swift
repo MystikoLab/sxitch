@@ -131,11 +131,211 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func registerDefaultSettings() {
         UserDefaults.standard.register(defaults: [
             "hotkey_keycode": 256,
+            "switcherAnimationStyle": SwitcherAnimation.fade.rawValue,
+            "animationSpeedMultiplier": 1.0,
+            "openCloseAnimationsEnabled": true,
         ])
         if #available(macOS 26.0, *) {
             UserDefaults.standard.register(defaults: [
                 "liquidGlass": true,
             ])
+        }
+    }
+
+    private var isClosingAnimated = false
+    private var isOpenAnimating = false
+    /// Final placement snapshotted by `prepareOpenAnimation` for animated
+    /// styles that temporarily offset the window (slide).
+    private var pendingOpenFrame: NSRect?
+
+    /// Called at `.switcherWillShow` time, i.e. *before* the window is
+    /// ordered front. Both styles are driven at the NSWindow level: the
+    /// SwiftUI id-swap approach races with compositing and produced a
+    /// full-opacity first frame instead of motion.
+    func prepareOpenAnimation() {
+        isOpenAnimating = false
+        pendingOpenFrame = nil
+        guard SwitcherAnimation.enabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+
+        let style = SwitcherAnimation.current
+        let frame = window.frame
+
+        switch style {
+        case .fade:
+            window.alphaValue = 0
+        case .slide:
+            pendingOpenFrame = frame
+            window.alphaValue = 0
+            // Start 24pt below the final position: `playOpenAnimation` then
+            // animates the frame up while fading in, like a doc slide.
+            window.setFrame(
+                NSRect(origin: NSPoint(x: frame.origin.x, y: frame.origin.y - SwitcherAnimation.slideOffset), size: frame.size),
+                display: false
+            )
+        case .drop:
+            pendingOpenFrame = frame
+            window.alphaValue = 0.85
+            // Start above the final position; playOpenAnimation falls onto it
+            // with a small settle bounce.
+            window.setFrame(
+                NSRect(origin: NSPoint(x: frame.origin.x, y: frame.origin.y + SwitcherAnimation.dropOffset), size: frame.size),
+                display: false
+            )
+        case .scale:
+            pendingOpenFrame = frame
+            window.alphaValue = 0
+            // Start at ~90% size, centered on the final frame.
+            let factor = SwitcherAnimation.scaleStartFactor
+            let startSize = NSSize(width: frame.width * factor, height: frame.height * factor)
+            let startOrigin = NSPoint(
+                x: frame.origin.x + (frame.width - startSize.width) / 2,
+                y: frame.origin.y + (frame.height - startSize.height) / 2
+            )
+            window.setFrame(NSRect(origin: startOrigin, size: startSize), display: false)
+        }
+        isOpenAnimating = true
+    }
+
+    /// Plays the AppKit-side entrance immediately after the window has been
+    /// ordered front. Fade replicates the macOS default window appearance;
+    /// slide rises 24pt with a fade. Call on every summon path, right after
+    /// `orderFrontRegardless`. Also guarantees the snap-to-final state when
+    /// animations are disabled or reduced-motion is on.
+    func playOpenAnimation() {
+        let targetFrame = pendingOpenFrame ?? window.frame
+        pendingOpenFrame = nil
+
+        func finish() {
+            isOpenAnimating = false
+            window.alphaValue = 1
+            window.setFrame(targetFrame, display: false)
+            resizeWindowToFit(force: true)
+        }
+
+        guard SwitcherAnimation.enabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            finish()
+            return
+        }
+
+        let style = SwitcherAnimation.current
+        let duration = style.openDuration * SwitcherAnimation.speed
+
+        if style == .drop {
+            // Two stages: fall onto (slightly past) the target, then settle
+            // back up. Reads as a drop with a bounce instead of a plain move.
+            let overshootFrame = NSRect(
+                origin: NSPoint(
+                    x: targetFrame.origin.x,
+                    y: targetFrame.origin.y - SwitcherAnimation.dropOvershoot
+                ),
+                size: targetFrame.size
+            )
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration * 0.7
+                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                window.animator().alphaValue = 0.95
+                window.animator().setFrame(overshootFrame, display: false)
+            } completionHandler: {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = duration * 0.3
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    self.window.animator().alphaValue = 1
+                    self.window.animator().setFrame(targetFrame, display: false)
+                } completionHandler: {
+                    self.isOpenAnimating = false
+                    self.resizeWindowToFit()
+                }
+            }
+            return
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window.animator().alphaValue = 1
+            if style == .slide || style == .scale {
+                window.animator().setFrame(targetFrame, display: false)
+            }
+        } completionHandler: {
+            self.isOpenAnimating = false
+            self.resizeWindowToFit()
+        }
+    }
+
+    /// Closes the switcher, playing the configured close animation for the
+    /// current style (fade matches the macOS-native appearance; slide mirrors
+    /// its open motion). The state reset must happen before the AppKit fade
+    /// so SwiftUI doesn't try to animate the content collapse while the
+    /// window is fading out.
+    func closeWindowAnimated() {
+        guard window.isVisible else { return }
+        appState.typed = ""
+        appState.depth = 0
+        appState.mode = .normal
+        appState.activeModeID = nil
+        appState.drillDownApp = nil
+        userState.shared.demoSwitcherVisible = false
+
+        // An open animation still in flight: snap everything to the final
+        // state and disappear; racing an entrance with an exit looks broken.
+        guard !isOpenAnimating else {
+            isOpenAnimating = false
+            pendingOpenFrame = nil
+            window.orderOut(nil)
+            window.alphaValue = 1
+            return
+        }
+
+        let style = SwitcherAnimation.current
+
+        guard SwitcherAnimation.enabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            window.orderOut(nil)
+            return
+        }
+        guard !isClosingAnimated else {
+            window.orderOut(nil)
+            return
+        }
+        isClosingAnimated = true
+
+        let duration = style.closeDuration * SwitcherAnimation.speed
+        let originalFrame = window.frame
+
+        // Exit frame for styles the reverse their entrance: slide falls, drop
+        // rises, scale shrinks centered.
+        var exitFrame = originalFrame
+        switch style {
+        case .fade:
+            break
+        case .slide:
+            exitFrame.origin.y -= SwitcherAnimation.slideOffset
+        case .drop:
+            exitFrame.origin.y += SwitcherAnimation.dropOffset
+        case .scale:
+            let factor = SwitcherAnimation.scaleStartFactor
+            let size = NSSize(width: originalFrame.width * factor, height: originalFrame.height * factor)
+            exitFrame = NSRect(
+                origin: NSPoint(
+                    x: originalFrame.origin.x + (originalFrame.width - size.width) / 2,
+                    y: originalFrame.origin.y + (originalFrame.height - size.height) / 2
+                ),
+                size: size
+            )
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            context.allowsImplicitAnimation = true
+            window.animator().alphaValue = 0
+            if style != .fade {
+                window.animator().setFrame(exitFrame, display: false)
+            }
+        } completionHandler: {
+            self.window.orderOut(nil)
+            self.window.alphaValue = 1
+            self.window.setFrame(originalFrame, display: false)
+            self.isClosingAnimated = false
         }
     }
 
@@ -149,14 +349,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func closeWindow() {
-        guard window.isVisible else { return }
-        appState.typed = ""
-        appState.depth = 0
-        appState.mode = .normal
-        appState.activeModeID = nil
-        appState.drillDownApp = nil
-        window.orderOut(nil)
-        userState.shared.demoSwitcherVisible = false
+        closeWindowAnimated()
     }
 
     /// True only while the onboarding window is actually on screen. Closing
@@ -180,6 +373,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             userState.shared.demoSwitcherVisible = true
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
+            playOpenAnimation()
         }
     }
 
@@ -291,7 +485,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.resizeWindowToFit(force: true)
                     self.positionWindow()
                     NotificationCenter.default.post(name: .switcherWillShow, object: nil)
-                    self.window.alphaValue = 1
+                    self.playOpenAnimation()
                 }
             }
         }
@@ -434,6 +628,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func resizeWindowToFit(force: Bool = false) {
         guard force || window.isVisible else { return }
+        // Repositioning mid-entrance would snap the animated frame.
+        guard !isOpenAnimating else { return }
         guard let hostingView = window.contentView else { return }
         hostingView.layoutSubtreeIfNeeded()
         let newSize = hostingView.fittingSize
@@ -461,6 +657,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         (window as! NSPanel).isFloatingPanel = true
         window.isOpaque = false
+        // The system's own open/close animation must be off: the switcher's
+        // entrance is entirely SwiftUI/AppKit-controlled, and macOS's default
+        // window-appear fade otherwise stacks on top of it.
+        window.animationBehavior = .none
         resizeWindowToFit()
         window.backgroundColor = .clear
         window.isMovableByWindowBackground = true
@@ -497,6 +697,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NotificationCenter.default.post(name: .switcherWillShow, object: nil)
             self.window.makeKeyAndOrderFront(nil)
             self.window.orderFrontRegardless()
+            self.playOpenAnimation()
         }
 
         NotificationCenter.default.addObserver(
@@ -824,6 +1025,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         self.positionWindow()
                         NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                         self.window.orderFrontRegardless()
+                        self.playOpenAnimation()
                     }
                 }
                 return nil
@@ -926,6 +1128,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         self.positionWindow()
                         NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                         self.window.orderFrontRegardless()
+                        self.playOpenAnimation()
                     }
                 }
                 return nil

@@ -279,10 +279,30 @@ func setupAutoSelect() {
 
 ---
 
+## Adding a new switcher animation
+
+Open/close animation styles live in **`Core/SwitcherAnimation.swift`** as the `SwitcherAnimation` enum (`fade`, `slide`, `drop`, `scale`). "Default" is the label users see for `fade` — the free plan's animation. All entrance/exit motion is driven at the NSWindow level (`AppDelegate.prepareOpenAnimation` / `playOpenAnimation` / `closeWindowAnimated`) — not via SwiftUI transitions, which race with the panel's first composited frame. To add a style:
+
+1. **Add the case** — the enum drives display names, Pro gating (`isPro`), and all timings (`openDuration`, `closeDuration`). Close automatically plays `openDuration / 1.5`.
+2. **Prime the entrance** — in `prepareOpenAnimation`, set the pre-show state (e.g. fade sets `alphaValue = 0`; slide also offsets the frame 24pt down and snapshots the final frame into `pendingOpenFrame`).
+3. **Play the entrance** — in `playOpenAnimation`, branch on the style and animate from primed state to final with `NSAnimationContext`. Every summon path already calls it right after `orderFrontRegardless`, and it also snaps to the final state when animations are disabled or Reduce Motion is on.
+4. **Wire the exit** — `closeWindowAnimated()` animates with AppKit; branch on the style there.
+5. **Gate it** — mark the case `isPro = true` only if it belongs in the paid tier. `SwitcherAnimation.current` downgrades Pro styles to `fade` when no valid licence exists, and the Animation settings tab snaps its picker back the same way. Never "test" a Pro style by forcing it — use an unlimited licence key.
+
+Settings keys (all user-configurable in Settings → Animation):
+
+| Key | Values | Purpose |
+|---|---|---|
+| `openCloseAnimationsEnabled` | Bool | Master on/off for entrance + exit animation |
+| `switcherAnimationStyle` | raw value of `SwitcherAnimation` | Which open/close animation |
+| `animationSpeedMultiplier` | Double, 0.5–2.0 | Speed applied to every animation |
+
+---
+
 ## File map
 
 ```
-Core/                    → AppMode, AppState, AppDelegate, models
+Core/                    → AppMode, AppState, AppDelegate, models, SwitcherAnimation
 Theme/                   → ModeTheme (central mode styling)
 Views/                   → ContentView, RunningApp cells, WindowPicker
 Views/Layouts/           → Grid, List, Circle (add yours here)

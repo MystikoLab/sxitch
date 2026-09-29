@@ -32,6 +32,7 @@ struct SettingsView: View {
         case "general": .gray
         case "keyboard": .indigo
         case "appearance": .pink
+        case "animation": .mint
         case "modes": .orange
         case "filters": .teal
         case "activate": .green

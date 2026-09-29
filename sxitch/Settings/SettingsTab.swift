@@ -18,6 +18,7 @@ enum RegisteredTabs {
         AnySettingsTab(id: "general", title: "General", icon: "gear", content: AnyView(GeneralSettingsView())),
         AnySettingsTab(id: "keyboard", title: "Keyboard", icon: "keyboard", content: AnyView(KeyboardSettingsView())),
         AnySettingsTab(id: "appearance", title: "Appearance", icon: "paintpalette.fill", content: AnyView(ThemeSettingsView())),
+        AnySettingsTab(id: "animation", title: "Animation", icon: "sparkles", content: AnyView(AnimationSettingsView())),
         AnySettingsTab(id: "modes", title: "Modes", icon: "square.stack.3d.up", content: AnyView(CustomModesSettingsView())),
         AnySettingsTab(id: "filters", title: "Filters", icon: "line.3.horizontal.decrease.circle", content: AnyView(FilterSettingsView())),
         AnySettingsTab(id: "activate", title: "Activate", icon: "lock", content: AnyView(ActivateSettingsView())),

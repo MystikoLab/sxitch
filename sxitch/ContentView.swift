@@ -127,6 +127,7 @@ struct ContentView: View {
                 NotificationCenter.default.publisher(for: .switcherWillShow)
             ) { _ in
                 reloadEntries()
+                appDelegate.prepareOpenAnimation()
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .openSettingsRequested)

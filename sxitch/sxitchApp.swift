@@ -36,6 +36,7 @@ struct sxitchApp: App {
                 NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                 appDelegate.window.makeKeyAndOrderFront(nil)
                 appDelegate.window.orderFrontRegardless()
+                appDelegate.playOpenAnimation()
             }
             Divider()
             Button("Github", systemImage: "chevron.left.forwardslash.chevron.right") {
