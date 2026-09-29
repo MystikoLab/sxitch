@@ -1,12 +1,13 @@
 import SwiftUI
 
-struct FilterSettingsView: View, SettingsTab {
-    static let tabID = "filters"
-    static let tabTitle = "Filters"
+struct ManagementRulesSettingsView: View, SettingsTab {
+    static let tabID = "management"
+    static let tabTitle = "Management & Rules"
     static let tabIcon = "line.3.horizontal.decrease.circle"
 
     @AppStorage("appBlacklists") var blacklist: [String] = []
     @AppStorage("prefixStrips") var prefixStrip: [String] = ["microsoft", "adobe"]
+    @AppStorage("windowPickerEnabled") private var windowPickerEnabled: Bool = true
 
     private var appState = userState.shared
     @State private var openApps = RunningApp.fetchRunningApps()
@@ -23,6 +24,7 @@ struct FilterSettingsView: View, SettingsTab {
                     listHeader: "Blacklisted Apps",
                     emptyMessage: "No apps blacklisted yet.",
                     placeholder: "App name",
+                    infoText: "Apps whose name matches an entry are hidden from the switcher entirely. Matching is case-insensitive.",
                     items: $blacklist
                 )
             }
@@ -31,20 +33,22 @@ struct FilterSettingsView: View, SettingsTab {
                 listHeader: "Prefix Stripping",
                 emptyMessage: "No prefixes added yet.",
                 placeholder: "Prefix",
+                infoText: "Leading words are removed from app names before matching, so \"Microsoft Word\" becomes \"Word\" and typing W finds it.",
                 items: $prefixStrip
             )
-            Section("App name override") {
-                if !appState.isPro {
-                    HStack {
+            Section {
+                HStack {
+                    InfoTipHeader(
+                        title: "App name override",
+                        tip: "Replace an app's name with your own, changing which keypresses will trigger the app. Enter the current name on the left and the replacement on the right."
+                    )
+                    Spacer()
+                    if !appState.isPro {
                         Label("Pro", systemImage: "lock.fill")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Spacer()
                     }
                 }
-                Text("Override the app's name, changing which keypresses will trigger the app.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
 
                 HStack {
                     TextField("Old name", text: $newAppRename)
@@ -90,8 +94,26 @@ struct FilterSettingsView: View, SettingsTab {
                     }
                 }
             }
+
+            Section {
+                HStack {
+                    Toggle("Window Picker", isOn: $windowPickerEnabled)
+                        .disabled(!appState.isPro)
+                    SettingInfoTip(text: "When an app has multiple windows open, drill down and pick the exact window instead of just activating the app.")
+                    if !appState.isPro {
+                        Spacer()
+                        Label("Pro", systemImage: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if !appState.isPro {
+                    Text("Upgrade to Pro to pick individual windows when an app has multiple open.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
-        .padding()
         .formStyle(.grouped)
     }
 

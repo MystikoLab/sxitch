@@ -30,14 +30,13 @@ struct AnimationSettingsView: View, SettingsTab {
     var body: some View {
         Form {
             Section {
-                Toggle("Enable animations", isOn: $animationsEnabled)
-                    .onChange(of: animationsEnabled) { _, _ in
-                        replayToken = UUID()
-                    }
-            } footer: {
-                Text("When off, the switcher appears and closes with no animation.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Toggle("Enable animations", isOn: $animationsEnabled)
+                        .onChange(of: animationsEnabled) { _, _ in
+                            replayToken = UUID()
+                        }
+                    SettingInfoTip(text: "When off, the switcher appears and closes with no animation.")
+                }
             }
 
             Section("Preview") {
@@ -77,8 +76,9 @@ struct AnimationSettingsView: View, SettingsTab {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("Speed")
+                        SettingInfoTip(text: "Applies to every animation, including Default.")
                         Spacer()
-                        Text(String(format: "%.1fx", animationSpeed))
+                        Text(String(format: "%.1fs", animationSpeed))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
@@ -95,14 +95,10 @@ struct AnimationSettingsView: View, SettingsTab {
                         // performer coalesces rapid repeats on its own.
                         performHaptic(.alignment)
                     }
-                    Text("Applies to every animation, including Default.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
                 .disabled(!animationsEnabled)
             }
         }
-        .padding()
         .formStyle(.grouped)
         .onAppear {
             loadWallpaper()

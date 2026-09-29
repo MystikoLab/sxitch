@@ -5,7 +5,7 @@ struct ContentView: View {
     @State private var openApps: [any SwitchableApp] = RunningApp.fetchRunningApps()
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
 
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modeTheme) private var modeTheme
 
@@ -132,7 +132,7 @@ struct ContentView: View {
             .onReceive(
                 NotificationCenter.default.publisher(for: .openSettingsRequested)
             ) { _ in
-                openSettings()
+                openWindow(id: "settings")
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .customModesChanged)

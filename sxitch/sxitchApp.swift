@@ -13,6 +13,7 @@ struct sxitchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @AppStorage("showMenuIcon") var showMenuIcon: Bool = true
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
+    @Environment(\.openWindow) private var openWindow
     var body: some Scene {
         MenuBarExtra(isInserted: $showMenuIcon) {
             Label {
@@ -60,8 +61,10 @@ struct sxitchApp: App {
                     NSWorkspace.shared.open(community)
                 }
             }
+            Button("Settings…", systemImage: "gear") {
+                openWindow(id: "settings")
+            }
 
-            SettingsLink()
             Button("Quit Sxitch", systemImage: "xmark.circle", role: .destructive) {
                 NSApp.terminate(nil)
             }
@@ -69,7 +72,9 @@ struct sxitchApp: App {
             OnboardingLauncher(hasCompletedOnboarding: hasCompletedOnboarding)
         }
 
-        Settings {
+        // Plain Window scene (not the special Settings scene) so the window
+        // uses SwiftUI's default decorations and title handling.
+        Window("Sxitch Settings", id: "settings") {
             SettingsView()
         }
 
@@ -78,6 +83,16 @@ struct sxitchApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
+        .commands {
+            // The Settings scene normally provides ⌘,; with a plain Window
+            // scene we register it ourselves.
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    openWindow(id: "settings")
+                }
+                .keyboardShortcut(",")
+            }
+        }
     }
 }
 

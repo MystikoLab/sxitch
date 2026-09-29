@@ -17,7 +17,7 @@ struct KeyboardSettingsView: View, SettingsTab {
     var body: some View {
         Form {
             SwitcherHotkeyPicker(tint: resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system") ?? .accentColor)
-            Section("Mode Hotkeys") {
+            Section {
                 HStack {
                     Text("Hide mode")
                     Spacer()
@@ -44,23 +44,26 @@ struct KeyboardSettingsView: View, SettingsTab {
                         Spacer()
                     }
                 }
-                Text("While the switcher is open, the shortcut toggles the corresponding action mode.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                InfoTipHeader(
+                    title: "Mode Hotkeys",
+                    tip: "While the switcher is open, the shortcut toggles the corresponding action mode."
+                )
             }
             AppHotkeySettingsView()
-            Section("Key Overrides") {
-                if !usState.isPro {
-                    HStack {
+            Section {
+                HStack {
+                    InfoTipHeader(
+                        title: "Key Overrides",
+                        tip: "Override the key that selects an app. Pressing the original key will select apps starting with the override letter instead."
+                    )
+                    Spacer()
+                    if !usState.isPro {
                         Label("Pro", systemImage: "lock.fill")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Spacer()
                     }
                 }
-                Text("Override the key that selects an app. Pressing the original key will select apps starting with the override letter instead.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
 
                 HStack {
                     TextField("Original", text: $newOverrideOriginal)
@@ -115,7 +118,6 @@ struct KeyboardSettingsView: View, SettingsTab {
                 }
             }
         }
-        .padding()
         .formStyle(.grouped)
     }
 

@@ -3,22 +3,20 @@ import CoreGraphics
 import ServiceManagement
 import SwiftUI
 
-struct GeneralSettingsView: View, SettingsTab {
-    static let tabID = "general"
-    static let tabTitle = "General"
+struct AppSettingsView: View, SettingsTab {
+    static let tabID = "app"
+    static let tabTitle = "App"
     static let tabIcon = "gear"
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
-    @AppStorage("showMenuIcon") private var showMenuIcon: Bool = true
     @Environment(\.openWindow) private var openWindow
-    private var usState = userState.shared
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
     @State private var screenRecordingGranted: Bool = CGPreflightScreenCaptureAccess()
     @State private var isLaunchAtLoginEnabled: Bool = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         Form {
-            Section("Permissions") {
+            Section {
                 HStack {
                     Image(
                         systemName: accessibilityGranted
@@ -65,35 +63,42 @@ struct GeneralSettingsView: View, SettingsTab {
                         }
                     }
                 }
+            } header: {
+                InfoTipHeader(
+                    title: "Permissions",
+                    tip: "Sxitch needs Accessibility to intercept the hotkey and switch apps, and Screen Recording to read app windows."
+                )
             }
 
             Section {
-                Toggle("Launch at login", isOn: $isLaunchAtLoginEnabled)
-                    .onChange(of: isLaunchAtLoginEnabled) { oldValue, newValue in
-                        do {
-                            if newValue {
-                                try SMAppService.mainApp.register()
-                            } else {
-                                try SMAppService.mainApp.unregister()
+                HStack {
+                    Toggle("Launch at login", isOn: $isLaunchAtLoginEnabled)
+                        .onChange(of: isLaunchAtLoginEnabled) { oldValue, newValue in
+                            do {
+                                if newValue {
+                                    try SMAppService.mainApp.register()
+                                } else {
+                                    try SMAppService.mainApp.unregister()
+                                }
+                            } catch {
+                                print(
+                                    "Failed to update login item state: \(error.localizedDescription)"
+                                )
+                                isLaunchAtLoginEnabled = oldValue
                             }
-                        } catch {
-                            print(
-                                "Failed to update login item state: \(error.localizedDescription)"
-                            )
-                            isLaunchAtLoginEnabled = oldValue
                         }
-                    }
-                Toggle("Show menu bar icon", isOn: $showMenuIcon)
+                    SettingInfoTip(text: "Start Sxitch automatically when you log in to this Mac.")
+                }
             }
 
-            Section("Setup") {
+            Section {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Revisit the setup guide")
-                            .fontWeight(.medium)
-                        Text("Walk through permissions and usage tips again.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Text("Revisit the setup guide")
+                                .fontWeight(.medium)
+                            SettingInfoTip(text: "Walk through permissions and usage tips again.")
+                        }
                     }
                     Spacer()
                     Button("Open Guide") {
@@ -105,7 +110,6 @@ struct GeneralSettingsView: View, SettingsTab {
                 }
             }
         }
-        .padding()
         .formStyle(.grouped)
     }
 }

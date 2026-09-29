@@ -5,12 +5,14 @@ struct ManagedListSection: View {
     let listHeader: String
     let emptyMessage: String
     let placeholder: String
+    /// Explanatory text surfaced as a hover info tip next to the headers.
+    var infoText: String? = nil
 
     @Binding var items: [String]
     @State private var newEntry: String = ""
 
     var body: some View {
-        Section(header: Text(addHeader)) {
+        Section {
             HStack {
                 TextField(placeholder, text: $newEntry)
                     .textFieldStyle(.roundedBorder)
@@ -18,9 +20,11 @@ struct ManagedListSection: View {
                 Button("Add", systemImage: "plus") { addItem() }
                     .disabled(newEntry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+        } header: {
+            headerView(for: addHeader)
         }
 
-        Section(header: Text(listHeader)) {
+        Section {
             if items.isEmpty {
                 Text(emptyMessage)
                     .foregroundStyle(.secondary)
@@ -42,6 +46,17 @@ struct ManagedListSection: View {
                     .padding(.vertical, 4)
                 }
             }
+        } header: {
+            headerView(for: listHeader)
+        }
+    }
+
+    @ViewBuilder
+    private func headerView(for title: String) -> some View {
+        if let infoText {
+            InfoTipHeader(title: title, tip: infoText)
+        } else {
+            Text(title)
         }
     }
 

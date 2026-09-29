@@ -13,10 +13,7 @@ struct AppHotkeySettingsView: View {
     @State private var showPicker = false
 
     var body: some View {
-        Section(
-            header: Text("App Launch Hotkeys"),
-            footer: Text("Shortcuts will launch the app even if it's not running.")
-        ) {
+        Section {
             ForEach(Array(hotkeys.keys.sorted()), id: \.self) { bundleURL in
                 HStack {
                     Text(appName(for: bundleURL))
@@ -49,6 +46,11 @@ struct AppHotkeySettingsView: View {
                     print("Error: \(error)")
                 }
             }
+        } header: {
+            InfoTipHeader(
+                title: "App Launch Hotkeys",
+                tip: "Shortcuts will launch the app even if it's not running."
+            )
         }
         .onReceive(
             NSWorkspace.shared.notificationCenter
