@@ -608,7 +608,7 @@ struct TutorialFeaturesPage: View {
                 FeatureShowcaseRow(
                     icon: "sparkle.magnifyingglass",
                     title: "Search & custom modes",
-                    description: "A search-first layout, key overrides, blacklists, and custom modes.",
+                    description: "A scrollable list layout, key overrides, blacklists, and custom modes.",
                     tint: accent
                 )
             }
@@ -651,8 +651,8 @@ struct TutorialLayoutPage: View {
                 LayoutPreviewCard(style: "circle", label: "Circle", isSelected: layoutStyle == "circle", slotTint: .white) {
                     layoutStyle = "circle"
                 }
-                LayoutPreviewCard(style: "search", label: "Search", isSelected: layoutStyle == "search", slotTint: .white) {
-                    layoutStyle = "search"
+                LayoutPreviewCard(style: "scrollList", label: "Scrollable List", isSelected: layoutStyle == "scrollList", slotTint: .white) {
+                    layoutStyle = "scrollList"
                 }
             }
             .padding(.vertical, 4)

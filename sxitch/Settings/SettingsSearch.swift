@@ -32,7 +32,7 @@ enum SettingsSearchIndex {
         SettingsSearchEntry(tabID: "appearance", title: "Accent Colour", keywords: ["color", "theme", "tint"]),
 
         // Theming › Layout
-        SettingsSearchEntry(tabID: "layout", title: "Layout", keywords: ["grid", "list", "circle", "search"]),
+        SettingsSearchEntry(tabID: "layout", title: "Layout", keywords: ["grid", "list", "circle", "scrollable", "scroll list"]),
         SettingsSearchEntry(tabID: "layout", title: "Window Position", keywords: ["screen", "placement", "corner"]),
 
         // Theming › Animation

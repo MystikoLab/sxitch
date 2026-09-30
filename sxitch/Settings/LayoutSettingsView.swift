@@ -44,11 +44,11 @@ struct LayoutSettingsView: View, SettingsTab {
                         layoutStyle = "circle"
                     }
                     LayoutShowcaseCard(
-                        style: "search", label: "Search",
-                        isSelected: layoutStyle == "search",
+                        style: "scrollList", label: "Scrollable List",
+                        isSelected: layoutStyle == "scrollList",
                         apps: sampleApps, wallpaperURL: wallpaperURL
                     ) {
-                        layoutStyle = "search"
+                        layoutStyle = "scrollList"
                     }
                 }
                 .padding(.vertical, 4)
@@ -153,13 +153,13 @@ struct LayoutShowcaseCard: View {
     @State private var isHovering = false
 
     /// Unlaid-out (1×) size of each layout's content, used to compute the
-    /// fit-to-card scale. List/Search are kept narrow so their panels hug
+    /// fit-to-card scale. List variants are kept narrow so their panels hug
     /// the app rows instead of stretching wide.
     private var contentSize: CGSize {
         switch style {
         case "list": CGSize(width: 170, height: 162)
         case "circle": CGSize(width: 420, height: 420)
-        case "search": CGSize(width: 190, height: 235)
+        case "scrollList": CGSize(width: 170, height: 220)
         default: CGSize(width: 400, height: 130)
         }
     }
@@ -238,8 +238,8 @@ struct LayoutShowcaseCard: View {
             ListAppLayout(apps: apps, typed: "", onTap: { _ in })
         case "circle":
             CircleAppLayout(apps: apps, typed: "", onTap: { _ in })
-        case "search":
-            SearchAppLayout(apps: apps, typed: "", onTap: { _ in })
+        case "scrollList":
+            ScrollableListAppLayout(apps: apps, typed: "", onTap: { _ in })
         default:
             GridAppLayout(apps: apps, typed: "", onTap: { _ in })
         }

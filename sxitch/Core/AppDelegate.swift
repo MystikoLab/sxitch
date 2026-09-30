@@ -340,8 +340,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillFinishLaunching(_: Notification) {
+        migrateLayoutStyle()
         registerDefaultSettings()
         NSApp.setActivationPolicy(.accessory)
+    }
+
+    /// The "Search" layout was replaced by "Scrollable List"; carry existing
+    /// users over so their saved choice doesn't fall back to Grid. Must run
+    /// before any view reads the "layoutStyle" AppStorage key.
+    private func migrateLayoutStyle() {
+        let defaults = UserDefaults.standard
+        if defaults.string(forKey: "layoutStyle") == "search" {
+            defaults.set("scrollList", forKey: "layoutStyle")
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
