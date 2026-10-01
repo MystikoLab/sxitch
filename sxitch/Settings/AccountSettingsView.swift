@@ -85,6 +85,55 @@ struct AccountSettingsView: View, SettingsTab {
                 Text("License Status")
             }
 
+            if appState.isPro {
+                Section {
+                    HStack(spacing: 8) {
+                        Text("Email")
+                        Spacer()
+                        if let info = appState.licenseInfo {
+                            Text(info.email)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        } else if appState.isRefreshingLicenseInfo {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text("Unable to load")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if let info = appState.licenseInfo {
+                        HStack {
+                            Text("Activations")
+                            SettingInfoTip(
+                                text:
+                                "Number of devices this license has been activated on."
+                            )
+                            Spacer()
+                            Text("\(info.activationsUsed) of \(info.activationLimit)")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                } header: {
+                    HStack(spacing: 8) {
+                        Text("License Details")
+                        Spacer()
+                        Button {
+                            Task { await appState.refreshLicenseInfo() }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .imageScale(.small)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .disabled(appState.isRefreshingLicenseInfo)
+                        .help("Refresh license info")
+                    }
+                }
+            }
+
             if !appState.isPro {
                 Section {
                     TextField("XXXX-XXXX-XXXX-XXXX", text: $licenseKey)
@@ -326,6 +375,7 @@ struct AccountSettingsView: View, SettingsTab {
                 if success {
                     appState.isPro = true
                     licenseKey = ""
+                    Task { await appState.refreshLicenseInfo() }
                 } else {
                     errorMessage = "Invalid license key or activation limit reached."
                     appState.isPro = false
