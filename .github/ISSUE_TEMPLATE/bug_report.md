@@ -31,9 +31,13 @@ I tried doing X but it's not getting it done with Y results
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
 
-**Desktop (please complete the following information):**
- - Sxitch Version [e.g. v1.3.1]
-- MacOS Version [e.g. MacOS 26]
+**Versions**
+Go to Sxitch > Settings > Account > Copy info, and paste it here:
+
+Or if you're on an older version of Sxitch (before v1.6):
+1. check if the issue can be fixed by upgrading
+2. only if you're sure it hasn't been reported, then share your macOS version and Sxitch version here, and if it's replicatable in the latest sxitch version.
+
 
 **Additional context**
 Add any other context about the problem here.
