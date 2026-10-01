@@ -183,6 +183,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "switcherAnimationStyle": SwitcherAnimation.fade.rawValue,
             "animationSpeedMultiplier": 1.0,
             "openCloseAnimationsEnabled": true,
+            "hapticsEnabled": true,
+            "hapticShowUp": true,
+            "hapticSwitchApp": true,
+            "hapticModeSwitch": true,
+            "hapticCustomModeSwitch": true,
+            "hapticOnboarding": true,
+            "hapticPattern": HapticPattern.generic.rawValue,
         ])
         if #available(macOS 26.0, *) {
             UserDefaults.standard.register(defaults: [
@@ -461,6 +468,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
                 self.appState.mode = self.appState.mode == mode ? .normal : mode
             }
+            Haptics.perform(.modeSwitch)
         }
     }
 
@@ -511,6 +519,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func toggleCustomMode(_ id: String) {
         guard CustomModeStore.load().contains(where: { $0.id.uuidString == id }) else { return }
         DispatchQueue.main.async {
+            Haptics.perform(.customModeSwitch)
             if self.window.isVisible {
                 if self.appState.activeModeID == id {
                     // Same mode again: toggle the window closed.
@@ -613,11 +622,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let entry = entries.first(where: { $0.appName.lowercased() == named }) else { return }
         let theme = ModeTheme.theme(for: appState.mode)
         let windowPickerEnabled = UserDefaults.standard.bool(forKey: "windowPickerEnabled")
+        var didSwitch = false
 
         if let running = entry.runningApplication {
             let windows = fetchWindowsForApp(running)
             if windows.count == 1 {
                 theme.windowAction(windows[0])
+                didSwitch = true
                 if appState.mode == .normal {
                     closeWindow()
                 }
@@ -625,17 +636,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 appState.drillDownApp = running
             } else {
                 theme.appAction(entry)
+                didSwitch = true
                 if appState.mode == .normal {
                     closeWindow()
                 }
             }
         } else {
             theme.appAction(entry)
+            didSwitch = true
             if appState.mode == .normal {
                 closeWindow()
             }
         }
 
+        if didSwitch {
+            Haptics.perform(.switchApp)
+        }
         appState.depth = 0
         appState.typed = ""
     }
@@ -1090,6 +1106,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                         self.window.orderFrontRegardless()
                         self.playOpenAnimation()
+                        Haptics.perform(.showUp)
                     }
                 }
                 return nil
@@ -1133,6 +1150,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         let theme = ModeTheme.theme(for: appState.mode)
                         DispatchQueue.main.async {
                             theme.windowAction(matchingWindows[0])
+                            Haptics.perform(.switchApp)
                             self.appState.depth = 0
                             self.appState.typed = ""
                             if self.appState.mode == .normal {
@@ -1194,6 +1212,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                         self.window.orderFrontRegardless()
                         self.playOpenAnimation()
+                        Haptics.perform(.showUp)
                     }
                 }
                 return nil

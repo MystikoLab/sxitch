@@ -318,6 +318,7 @@ struct SettingsView: View {
         case "appearance": .pink
         case "layout": .blue
         case "animation": .mint
+        case "haptics": .purple
         case "modes", "modes-list": .orange
         default:
             id.hasPrefix("mode-") ? .orange : .gray

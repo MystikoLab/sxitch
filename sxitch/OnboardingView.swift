@@ -157,6 +157,7 @@ struct OnboardingView: View {
                     .keyboardShortcut(keyboardShortcutIfAllowed(.rightArrow))
                 } else {
                     Button("Get Started") {
+                        Haptics.perform(.onboarding)
                         hasCompletedOnboarding = true
                         NotificationCenter.default.post(name: .onboardingCompleted, object: nil)
                     }
@@ -204,12 +205,14 @@ struct OnboardingView: View {
     }
 
     private func goBack() {
+        Haptics.perform(.onboarding)
         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
             currentPage = OnboardingPage(rawValue: max(0, pageIndex - 1)) ?? .welcome
         }
     }
 
     private func advance() {
+        Haptics.perform(.onboarding)
         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
             if let next = OnboardingPage(rawValue: pageIndex + 1) {
                 currentPage = next

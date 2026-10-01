@@ -40,6 +40,12 @@ enum SettingsSearchIndex {
         SettingsSearchEntry(tabID: "animation", title: "Open / Close Animation", keywords: ["fade", "slide", "drop", "scale", "preview"]),
         SettingsSearchEntry(tabID: "animation", title: "Speed", keywords: ["duration", "multiplier"]),
 
+        // Theming › Haptics
+        SettingsSearchEntry(tabID: "haptics", title: "Enable haptics", keywords: ["vibration", "disable", "off", "trackpad"]),
+        SettingsSearchEntry(tabID: "haptics", title: "Switcher Feedback", keywords: ["show up", "switch app", "mode", "custom mode", "feedback"]),
+        SettingsSearchEntry(tabID: "haptics", title: "Onboarding", keywords: ["setup guide", "steps"]),
+        SettingsSearchEntry(tabID: "haptics", title: "Pattern", keywords: ["generic", "alignment", "level change", "pattern match"]),
+
         // Modes
         SettingsSearchEntry(tabID: "modes", title: "All Modes", keywords: ["custom mode", "add mode", "mode hotkey", "editor"]),
 
