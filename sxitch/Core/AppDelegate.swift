@@ -50,6 +50,55 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ]
     }
 
+    /// macOS periodically re-parents windows back to their original space — after
+    /// sleep/wake, screen-lock/unlock, display hot-plugs and Mission Control —
+    /// dropping the window's `canJoinAllSpaces` behavior in the process. Re-applying
+    /// the config on every summon and on those system events is the known fix:
+    /// setting the same values is cheap and keeps the switcher following spaces.
+    @objc func reapplyWindowBehavior() {
+        guard window != nil else { return }
+        windowConfig()
+    }
+
+    private func observeSpaceRelinquishingSystemEvents() {
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+        // Screen lock/unlock and login-window transitions.
+        workspaceCenter.addObserver(
+            self,
+            selector: #selector(reapplyWindowBehavior),
+            name: NSWorkspace.sessionDidResignActiveNotification,
+            object: nil
+        )
+        workspaceCenter.addObserver(
+            self,
+            selector: #selector(reapplyWindowBehavior),
+            name: NSWorkspace.sessionDidBecomeActiveNotification,
+            object: nil
+        )
+        // Sleep/wake.
+        workspaceCenter.addObserver(
+            self,
+            selector: #selector(reapplyWindowBehavior),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+        // Switching spaces re-homes windows; re-asserting here repairs the
+        // behavior before the next summon instead of after a restart.
+        workspaceCenter.addObserver(
+            self,
+            selector: #selector(reapplyWindowBehavior),
+            name: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil
+        )
+        // Display hot-plug / resolution change.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reapplyWindowBehavior),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+    }
+
     private func parseModifierConfig() -> [(family: Int, side: String)] {
         let str = UserDefaults.standard.string(forKey: "hotkey_modifier_config") ?? ""
         if str.isEmpty {
@@ -379,6 +428,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             closeWindow()
         } else {
             windowConfig()
+            observeSpaceRelinquishingSystemEvents()
             positionWindow()
             NotificationCenter.default.post(name: .switcherWillShow, object: nil)
             userState.shared.demoSwitcherVisible = true
@@ -486,6 +536,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.appState.depth = 0
                 }
                 self.window.alphaValue = 0
+                self.reapplyWindowBehavior()
                 self.window.orderFrontRegardless()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0 / 60.0) {
                     // A fast toggle may have closed or replaced the mode in the meantime.
@@ -706,6 +757,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 .filter { $0.identifier?.rawValue == "onboarding" }
                 .forEach { $0.close() }
             NotificationCenter.default.post(name: .switcherWillShow, object: nil)
+            self.reapplyWindowBehavior()
             self.window.makeKeyAndOrderFront(nil)
             self.window.orderFrontRegardless()
             self.playOpenAnimation()
@@ -1033,6 +1085,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     if self.window.isVisible {
                         self.closeWindow()
                     } else {
+                        self.reapplyWindowBehavior()
                         self.positionWindow()
                         NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                         self.window.orderFrontRegardless()
@@ -1136,6 +1189,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     if self.window.isVisible {
                         self.closeWindow()
                     } else {
+                        self.reapplyWindowBehavior()
                         self.positionWindow()
                         NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                         self.window.orderFrontRegardless()
