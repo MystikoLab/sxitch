@@ -51,9 +51,11 @@ enum SettingsSearchIndex {
 
         // Account
         SettingsSearchEntry(tabID: "account", title: "License Status", keywords: ["pro", "free", "activated"]),
+        SettingsSearchEntry(tabID: "account", title: "Pro Mode", keywords: ["free mode", "disable pro", "debugging", "revert", "toggle"]),
+        SettingsSearchEntry(tabID: "account", title: "Recover License", keywords: ["lost key", "recover", "resend key"]),
         SettingsSearchEntry(tabID: "account", title: "License Key", keywords: ["view key", "copy key"]),
         SettingsSearchEntry(tabID: "account", title: "Activate Pro", keywords: ["license", "key", "code", "unlock"]),
-        SettingsSearchEntry(tabID: "account", title: "Get Sxitch Pro", keywords: ["buy", "subscribe", "price", "purchase"]),
+        SettingsSearchEntry(tabID: "account", title: "Get Sxitch Pro", keywords: ["buy", "price", "purchase"]),
     ]
 
     /// Per-mode entries derived from the stored modes so searching a mode's

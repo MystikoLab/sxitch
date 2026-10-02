@@ -16,6 +16,24 @@ struct AccountSettingsView: View, SettingsTab {
     @State private var isKeyHovered = false
     @State private var didCopyKey = false
     @State private var didCopyInfo = false
+    @State private var showsDisableProModeDialog = false
+
+    /// Drives the Pro Mode toggle. Turning it off asks for confirmation
+    /// before clearing `isPro`; turning it on re-runs the Polar validation
+    /// before Pro features come back. While the re-check is in flight the
+    /// toggle reads as on.
+    private var proModeBinding: Binding<Bool> {
+        Binding(
+            get: { appState.isPro || appState.isCheckingLicense },
+            set: { newValue in
+                if newValue {
+                    Task { await appState.checkCurrentActivationStatus(force: true) }
+                } else {
+                    showsDisableProModeDialog = true
+                }
+            }
+        )
+    }
 
     private var appState = userState.shared
 
@@ -85,6 +103,27 @@ struct AccountSettingsView: View, SettingsTab {
                 Text("License Status")
             }
 
+            if appState.hasValidLicense {
+                Section {
+                    HStack(spacing: 8) {
+                        Toggle("Pro Mode", isOn: proModeBinding)
+                        SettingInfoTip(text: "Made for debugging free mode")
+                    }
+                    Text("Turn off to debug the free experience. Applies to this session only and resets on relaunch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if !appState.isPro {
+                        Button("Revert to Pro") {
+                            Task { await appState.checkCurrentActivationStatus(force: true) }
+                        }
+                        .disabled(appState.isCheckingLicense)
+                        .help("Re-validate your license to restore Pro Mode")
+                    }
+                } header: {
+                    Text("Pro Mode")
+                }
+            }
+
             if appState.isPro {
                 Section {
                     HStack(spacing: 8) {
@@ -147,20 +186,28 @@ struct AccountSettingsView: View, SettingsTab {
                             .font(.caption)
                     }
 
-                    Button(action: {
-                        Task { await performActivation() }
-                    }) {
-                        if isActivating {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Text("Activate Key")
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            Task { await performActivation() }
+                        }) {
+                            if isActivating {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Text("Activate Key")
+                            }
                         }
+                        .disabled(
+                            licenseKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                || isActivating
+                        )
+
+                        Button("Recover") {
+                            openURL("https://sxitch.app/recover")
+                        }
+                        .buttonStyle(.bordered)
+                        .help("Lost your key? Opens sxitch.app/recover")
                     }
-                    .disabled(
-                        licenseKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            || isActivating
-                    )
                 } header: {
                     InfoTipHeader(
                         title: "Activate Pro",
@@ -185,33 +232,18 @@ struct AccountSettingsView: View, SettingsTab {
                         }
                     }
                     .padding(.vertical, 4)
-                    HStack(spacing: 12) {
-                        Button(action: { openCheckout(.oneTime) }) {
-                            VStack(spacing: 2) {
-                                Text("Buy Once")
-                                    .font(.headline)
-                                Text("$10 · lifetime")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
+                    Button(action: { openURL("https://buy.polar.sh/polar_cl_KHE76N1u71k4CQZMxjSlJDS9Ylh1gOI2p89z74ZxJ5c") }) {
+                        VStack(spacing: 2) {
+                            Text("Buy Once")
+                                .font(.headline)
+                            Text("$10 · lifetime")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
-                        .buttonStyle(.borderedProminent)
-
-                        Button(action: { openCheckout(.subscription) }) {
-                            VStack(spacing: 2) {
-                                Text("Subscribe")
-                                    .font(.headline)
-                                Text("$2 / month")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                        }
-                        .buttonStyle(.bordered)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
                     }
+                    .buttonStyle(.borderedProminent)
                     .padding(.vertical, 4)
                 } header: {
                     InfoTipHeader(
@@ -264,6 +296,18 @@ struct AccountSettingsView: View, SettingsTab {
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(
+            "Turn off Pro Mode?",
+            isPresented: $showsDisableProModeDialog,
+            titleVisibility: .visible
+        ) {
+            Button("Turn Off", role: .destructive) {
+                appState.isPro = false
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Pro features will be locked until you turn Pro Mode back on.")
+        }
         .task {
             await appState.checkCurrentActivationStatus()
             loadStoredKey()
@@ -374,6 +418,7 @@ struct AccountSettingsView: View, SettingsTab {
             await MainActor.run {
                 if success {
                     appState.isPro = true
+                    appState.hasValidLicense = true
                     licenseKey = ""
                     Task { await appState.refreshLicenseInfo() }
                 } else {
@@ -394,27 +439,10 @@ struct AccountSettingsView: View, SettingsTab {
         do {
             try deleteCredentials()
             appState.isPro = false
+            appState.hasValidLicense = false
             storedKey = nil
         } catch {
             print("Failed to remove credentials from Keychain: \(error)")
         }
     }
-}
-
-private enum PurchasePlan {
-    case oneTime
-    case subscription
-
-    var checkoutURL: URL {
-        switch self {
-        case .oneTime:
-            return URL(string: "https://buy.polar.sh/polar_cl_KHE76N1u71k4CQZMxjSlJDS9Ylh1gOI2p89z74ZxJ5c")!
-        case .subscription:
-            return URL(string: "https://buy.polar.sh/polar_cl_MhcxcWQljznmm2jcMhSp9XMevDqLz7zQfn9mD11VGTg")!
-        }
-    }
-}
-
-private func openCheckout(_ plan: PurchasePlan) {
-    NSWorkspace.shared.open(plan.checkoutURL)
 }

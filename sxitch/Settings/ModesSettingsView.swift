@@ -44,6 +44,7 @@ struct AllModesSettingsView: View, SettingsTab {
                 ForEach(modes) { mode in
                     ModeListRow(
                         mode: mode,
+                        isHotkeyEligible: hotkeyEligible(for: mode),
                         onOpen: {
                             onOpenMode?(mode.id)
                         },
@@ -65,7 +66,7 @@ struct AllModesSettingsView: View, SettingsTab {
                             .foregroundStyle(.secondary)
                         Spacer()
                     }
-                    Text("Upgrade to Pro for unlimited modes and mode hotkeys.")
+                    Text("Upgrade to Pro for unlimited modes. Hotkeys for your first two modes work on the free plan.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -99,6 +100,14 @@ struct AllModesSettingsView: View, SettingsTab {
             modesModel.save(updated)
         }
     }
+
+    /// Mirrors the runtime: on the free plan hotkeys only fire for the
+    /// first `freeModeLimit` modes.
+    private func hotkeyEligible(for mode: CustomMode) -> Bool {
+        usState.isPro
+            || (modes.firstIndex(where: { $0.id == mode.id }) ?? Int.max)
+            < CustomModeStore.freeModeLimit
+    }
 }
 
 // MARK: - Mode list row
@@ -107,6 +116,7 @@ struct AllModesSettingsView: View, SettingsTab {
 /// page; deletion lives in the right-click context menu.
 private struct ModeListRow: View {
     let mode: CustomMode
+    let isHotkeyEligible: Bool
     let onOpen: () -> Void
     let onDelete: () -> Void
 
@@ -125,6 +135,11 @@ private struct ModeListRow: View {
             }
             Spacer()
             KeyboardShortcuts.Recorder(for: .customMode(mode.id.uuidString))
+                .disabled(!isHotkeyEligible)
+                .help(
+                    isHotkeyEligible
+                        ? "" : "Free plan covers hotkeys for the first 2 modes"
+                )
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(
@@ -178,10 +193,18 @@ struct ModeSettingsPage: View {
     @State private var imageTargetAppID: UUID?
     @State private var symbolTargetAppID: UUID?
 
-    /// Free users can record hotkeys while under the free mode limit;
-    /// matching the pre-restructure behaviour.
+    /// Free users can record hotkeys for the modes the runtime actually
+    /// registers them for: the first `freeModeLimit` modes (see
+    /// `AppDelegate.registerModeHotkeys`). Total count doesn't matter.
     private var canRecord: Bool {
-        usState.isPro || modesModel.modes.count < CustomModeStore.freeModeLimit
+        usState.isPro || hotkeyEligible
+    }
+
+    private var hotkeyEligible: Bool {
+        guard let index = modesModel.modes.firstIndex(where: { $0.id == modeID }) else {
+            return false
+        }
+        return index < CustomModeStore.freeModeLimit
     }
 
     var body: some View {
@@ -232,7 +255,7 @@ struct ModeSettingsPage: View {
                     Spacer()
                     KeyboardShortcuts.Recorder(for: .customMode(modeID.uuidString))
                         .disabled(!canRecord)
-                    if !usState.isPro && !canRecord {
+                    if !canRecord {
                         Label("Pro", systemImage: "lock.fill")
                             .font(.caption)
                             .foregroundStyle(.secondary)

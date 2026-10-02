@@ -70,11 +70,11 @@ struct SettingsView: View {
             Image(systemName: "person.crop.circle.fill")
                 .font(.system(size: 23))
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(usState.isPro ? .green : .gray)
+                .foregroundStyle(usState.hasValidLicense ? .green : .gray)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Account")
                     .fontWeight(.semibold)
-                Text(usState.isPro ? "Sxitch Pro activated" : "Free version")
+                Text(accountSubtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -83,6 +83,15 @@ struct SettingsView: View {
         .contentShape(Rectangle())
         .padding(.vertical, 5)
         .tag("account")
+    }
+
+    /// License validity vs. the Pro Mode debug toggle: "Pro Mode off" only
+    /// when a valid license exists but the user toggled `isPro` off.
+    private var accountSubtitle: String {
+        if usState.isPro {
+            return "Sxitch Pro activated"
+        }
+        return usState.hasValidLicense ? "Pro Mode off" : "Free version"
     }
 
     private func matchedEntryTitles(for tabID: String) -> [String] {

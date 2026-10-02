@@ -632,7 +632,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if appState.mode == .normal {
                     closeWindow()
                 }
-            } else if windows.count > 1, proState.isPro, windowPickerEnabled {
+            } else if windows.count > 1, proState.isPro,
+                      windowPickerEnabled
+            {
                 appState.drillDownApp = running
             } else {
                 theme.appAction(entry)

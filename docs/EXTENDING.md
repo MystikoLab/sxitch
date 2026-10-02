@@ -287,7 +287,7 @@ Open/close animation styles live in **`Core/SwitcherAnimation.swift`** as the `S
 2. **Prime the entrance** — in `prepareOpenAnimation`, set the pre-show state (e.g. fade sets `alphaValue = 0`; slide also offsets the frame 24pt down and snapshots the final frame into `pendingOpenFrame`).
 3. **Play the entrance** — in `playOpenAnimation`, branch on the style and animate from primed state to final with `NSAnimationContext`. Every summon path already calls it right after `orderFrontRegardless`, and it also snaps to the final state when animations are disabled or Reduce Motion is on.
 4. **Wire the exit** — `closeWindowAnimated()` animates with AppKit; branch on the style there.
-5. **Gate it** — mark the case `isPro = true` only if it belongs in the paid tier. `SwitcherAnimation.current` downgrades Pro styles to `fade` when no valid licence exists, and the Animation settings tab snaps its picker back the same way. Never "test" a Pro style by forcing it — use an unlimited licence key.
+5. **Gate it** — mark the case `isPro = true` only if it belongs in the paid tier. `SwitcherAnimation.current` downgrades Pro styles to `fade` when Pro Mode isn't active (no valid licence, or the user toggled Pro Mode off on the Account page to debug the free experience), and the Animation settings tab snaps its picker back the same way. Never "test" a Pro style by forcing it — use an unlimited licence key.
 
 Settings keys (all user-configurable in Settings → Animation):
 

@@ -856,6 +856,7 @@ struct LicensePage: View {
             let success = try await activateKey(key: cleanedKey)
             if success {
                 appState.isPro = true
+                appState.hasValidLicense = true
                 licenseKey = ""
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                     justActivated = true
