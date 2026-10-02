@@ -239,14 +239,60 @@ struct ContentView: View {
 
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         let newName = input.stringValue.trimmingCharacters(in: .whitespaces)
-        let key = currentName.lowercased()
-        var renames = UserDefaults.standard.appRenames
-        if newName.isEmpty || newName == currentName {
-            renames.removeValue(forKey: key)
+
+        if let pinned = app as? PinnedApp {
+            renameModeEntry(pinned, newName: newName)
         } else {
-            renames[key] = newName
+            renameRunningApp(app, newName: newName, currentName: currentName)
+        }
+    }
+
+    /// Entries backed by a custom-mode app are renamed by editing that entry's
+    /// own display name in place, matched by its UUID so a rename survives the
+    /// name change itself.
+    private func renameModeEntry(_ pinned: PinnedApp, newName: String) {
+        guard !newName.isEmpty else { return }
+        let entryID = pinned.modeApp.id
+        var modes = CustomModeStore.load()
+        guard let modeIndex = modes.firstIndex(where: { mode in
+            mode.apps.contains(where: { $0.id == entryID })
+        }) else { return }
+        guard let appIndex = modes[modeIndex].apps.firstIndex(where: { $0.id == entryID }) else { return }
+        if modes[modeIndex].apps[appIndex].displayName == newName {
+            return
+        }
+        modes[modeIndex].apps[appIndex].displayName = newName
+        CustomModeStore.save(modes)
+        NotificationCenter.default.post(name: .customModesChanged, object: nil)
+        reloadEntries()
+    }
+
+    /// Running apps are renamed through the global `app_renames` rules, keyed
+    /// by the app's real name — the same key the name lookup reads when the
+    /// switcher is populated. Re-renaming therefore edits the existing rule
+    /// instead of writing a new one that can never match.
+    private func renameRunningApp(_ app: any SwitchableApp, newName: String, currentName: String) {
+        let realKey = app.realName.lowercased()
+        var renames = UserDefaults.standard.appRenames
+        if newName == currentName {
+            // Nothing changed: leave any existing rule alone.
+            return
+        }
+        if newName.isEmpty || newName == app.realName {
+            // Clearing the field or typing the original name reverts the rename.
+            renames.removeValue(forKey: realKey)
+        } else {
+            renames[realKey] = newName
+        }
+        // The app may be displayed under a rename or prefix strip, so a rule
+        // written by earlier versions (keyed by the displayed name) may exist
+        // alongside the corrected one. Clear any such stale entry.
+        let displayedKey = currentName.lowercased()
+        if displayedKey != realKey {
+            renames.removeValue(forKey: displayedKey)
         }
         UserDefaults.standard.appRenames = renames
+        NotificationCenter.default.post(name: .appRenamesChanged, object: nil)
         NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
         reloadEntries()
     }

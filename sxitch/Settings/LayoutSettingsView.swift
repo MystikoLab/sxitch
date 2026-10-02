@@ -116,6 +116,11 @@ struct LayoutSettingsView: View, SettingsTab {
 struct PreviewSwitchableApp: SwitchableApp {
     let id: String
     let appName: String
+
+    var realName: String {
+        appName
+    }
+
     let icon: NSImage
     var symbolName: String? {
         nil

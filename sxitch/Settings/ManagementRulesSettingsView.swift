@@ -115,6 +115,11 @@ struct ManagementRulesSettingsView: View, SettingsTab {
             }
         }
         .formStyle(.grouped)
+        .onReceive(NotificationCenter.default.publisher(for: .appRenamesChanged)) { _ in
+            // Renames can also be made from the switcher's right-click menu;
+            // keep the rules list in sync without reopening Settings.
+            appRenames = UserDefaults.standard.appRenames
+        }
     }
 
     private func addAppRename() {
