@@ -45,8 +45,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         window.collectionBehavior = [
             .canJoinAllSpaces,
-            .stationary,
-            .fullScreenAuxiliary,
         ]
     }
 
