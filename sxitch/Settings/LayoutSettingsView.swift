@@ -62,15 +62,33 @@ struct LayoutSettingsView: View, SettingsTab {
             Section {
                 HStack {
                     Text("Window Position")
-                    SettingInfoTip(text: "Where the switcher panel appears on screen.")
+                    SettingInfoTip(
+                        text:
+                        "Where the switcher panel appears on screen. Dragging the switcher anywhere sets a Custom position (Pro)."
+                    )
                     Spacer()
                     Picker("Window Position", selection: $windowPosition) {
-                        ForEach(Position.allCases, id: \.rawValue) { pos in
+                        // Custom isn't a pickable preset: it exists only while
+                        // the drag-set coordinates are live, staying listed so
+                        // the current value is visible until it's switched away.
+                        if windowPosition == Position.custom.rawValue {
+                            Text(Position.custom.displayName).tag(Position.custom.rawValue)
+                        }
+                        ForEach(
+                            Position.allCases.filter { $0 != .custom },
+                            id: \.rawValue
+                        ) { pos in
                             Text(pos.displayName).tag(pos.rawValue)
                         }
                     }
                     .labelsHidden()
                     .fixedSize()
+                    .onChange(of: windowPosition) { oldValue, newValue in
+                        guard oldValue == Position.custom.rawValue,
+                              newValue != Position.custom.rawValue
+                        else { return }
+                        confirmLeavingCustom(from: oldValue)
+                    }
                 }
             }
         }
@@ -78,6 +96,25 @@ struct LayoutSettingsView: View, SettingsTab {
         .onAppear {
             loadWallpaper()
             loadSampleApps()
+        }
+    }
+
+    /// Switching off Custom discards the drag coordinates for good — warn
+    /// first, since the only way back is dragging the panel again.
+    private func confirmLeavingCustom(from customValue: String) {
+        let alert = NSAlert()
+        alert.messageText = "Leave Custom position?"
+        alert.informativeText =
+            "Your custom placement will be discarded. You'll have to drag the switcher window again to set a custom position later."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Switch anyway")
+        alert.addButton(withTitle: "Keep Custom")
+        let response = alert.runModal()
+
+        if response == .alertFirstButtonReturn {
+            AppDelegate.discardCustomPositionCoordinatesStatic()
+        } else {
+            windowPosition = customValue
         }
     }
 

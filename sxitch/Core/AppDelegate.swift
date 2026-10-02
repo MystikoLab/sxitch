@@ -3,6 +3,17 @@ import Combine
 import KeyboardShortcuts
 import SwiftUI
 
+/// NSHostingView only reports "this click can move the window" where the
+/// SwiftUI hit-test finds no content, and the full-bleed panel content
+/// (material background + clip) defeats that — leaving
+/// `isMovableByWindowBackground` dead. Forcing YES restores background
+/// dragging; a plain click (no movement) still reaches the app cells.
+final class SwitcherHostingView: NSHostingView<ContentView> {
+    override var mouseDownCanMoveWindow: Bool {
+        true
+    }
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     var appState = AppState()
     var window: NSWindow!
@@ -41,7 +52,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let familyRightCodes: [Int] = [61, 54, 60, 62, 57]
 
     private func windowConfig() {
-        window.level = NSWindow.Level(NSWindow.Level.floating.rawValue + 200)
+        window.level = NSWindow.Level(NSWindow.Level.floating.rawValue + 100)
 
         window.collectionBehavior = [
             .canJoinAllSpaces,
@@ -201,6 +212,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Final placement snapshotted by `prepareOpenAnimation` for animated
     /// styles that temporarily offset the window (slide).
     private var pendingOpenFrame: NSRect?
+    /// Debounces the burst of `didMove` notifications while a drag is in
+    /// flight; only the settled frame is saved as the custom position.
+    private var customPositionSaveWork: DispatchWorkItem?
+    /// True between mouse-down and mouse-up on the panel so `didMove` can
+    /// tell a user drag from a window-server relayout. Cleared on mouse-up;
+    /// pending saves are gated on `dragWasActive` instead so they survive it.
+    private var isUserDraggingWindow = false
+    /// True once a drag produced at least one move; lets the debounced save
+    /// run after mouse-up without its own suppression gate tripping it.
+    private var dragWasActive = false
+    /// The panel mouse-down held back until movement proves it's a drag, at
+    /// which point it starts the native window-server drag loop for us.
+    private var pendingDragMouseDown: NSEvent?
+    /// Frame and screen captured on the last drag `didMove` — committed as
+    /// the Custom position, immune to any repositioning in between (e.g. a
+    /// summon that lands inside the save debounce window).
+    private var lastDraggedFrame: NSRect?
+    private var lastDraggedScreen: NSScreen?
 
     /// Called at `.switcherWillShow` time, i.e. *before* the window is
     /// ordered front. Both styles are driven at the NSWindow level: the
@@ -664,6 +693,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "windowPosition") }
     }
 
+    /// Custom ("drag to place") placement, stored as percentages of the
+    /// screen the window was dropped on, anchored to the window's center so
+    /// the spot survives the panel growing or shrinking with its content.
+    var customPositionXPercent: Double {
+        get { UserDefaults.standard.double(forKey: "customPositionXPercent") }
+        set { UserDefaults.standard.set(newValue, forKey: "customPositionXPercent") }
+    }
+
+    var customPositionYPercent: Double {
+        get { UserDefaults.standard.double(forKey: "customPositionYPercent") }
+        set { UserDefaults.standard.set(newValue, forKey: "customPositionYPercent") }
+    }
+
+    private var hasCustomPositionCoordinates: Bool {
+        UserDefaults.standard.object(forKey: "customPositionXPercent") != nil
+    }
+
+    /// Clearing the coordinates keeps "Custom" from outliving the position it
+    /// stood for: leaving Custom in settings discards them, so a later
+    /// re-entry is only possible by dragging again. Static so the settings
+    /// view can reach it without a reference to this delegate instance.
+    static func discardCustomPositionCoordinatesStatic() {
+        UserDefaults.standard.removeObject(forKey: "customPositionXPercent")
+        UserDefaults.standard.removeObject(forKey: "customPositionYPercent")
+    }
+
+    /// True while the app itself is moving the window (summon placement,
+    /// resize re-anchoring, animation offsets) so those moves are never
+    /// mistaken for the user dragging it into a custom spot.
+    private var suppressMoveSaving = false
+
+    /// Every programmatic origin change goes through here; `didMove` fires
+    /// for these too and relies on the guard.
+    private func setWindowOrigin(_ origin: NSPoint) {
+        suppressMoveSaving = true
+        window.setFrameOrigin(origin)
+        suppressMoveSaving = false
+    }
+
     func screenWithMouse() -> NSScreen {
         let mouse = NSEvent.mouseLocation
         return NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main!
@@ -678,6 +746,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func positionWindow() {
+        // A drag that settled just before this summon (release → quick summon,
+        // inside the commit debounce) is flushed first so placement uses the
+        // position the panel was actually dropped at, not the stale one.
+        if dragWasActive {
+            commitDraggedPosition()
+        }
         if windowPosition == .default {
             window.center()
         } else if windowPosition == .mousePos {
@@ -695,13 +769,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             origin.x = min(max(origin.x, visible.minX), visible.maxX - size.width)
             origin.y = min(max(origin.y, visible.minY), visible.maxY - size.height)
 
-            window.setFrameOrigin(origin)
+            setWindowOrigin(origin)
+        } else if windowPosition == .custom {
+            setWindowOrigin(customOrigin(for: window.frame.size))
         } else {
             let screen = screenWithMouse()
             let size = window.frame.size
             let origin = windowPosition.point(for: size, on: screen)
-            window.setFrameOrigin(origin)
+            setWindowOrigin(origin)
         }
+    }
+
+    /// Screen-frame placement for the dragged position. Percentages anchor the
+    /// window's center; missing coordinates (should only happen if storage was
+    /// cleared under a still-selected Custom) fall back to centered so the
+    /// panel never gets stuck off-screen or at (0, 0).
+    private func customOrigin(for size: NSSize) -> NSPoint {
+        guard hasCustomPositionCoordinates else {
+            let screen = screenWithMouse()
+            return NSPoint(
+                x: screen.frame.origin.x + (screen.frame.width - size.width) / 2,
+                y: screen.frame.origin.y + (screen.frame.height - size.height) / 2
+            )
+        }
+        let screen = screenWithMouse()
+        let frame = screen.frame
+        let clampedX = min(max(customPositionXPercent, 0), 100)
+        let clampedY = min(max(customPositionYPercent, 0), 100)
+        return NSPoint(
+            x: frame.origin.x + frame.width * clampedX / 100 - size.width / 2,
+            y: frame.origin.y + frame.height * clampedY / 100 - size.height / 2
+        )
     }
 
     func resizeWindowToFit(force: Bool = false) {
@@ -719,10 +817,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         if windowPosition == .default {
             window.center()
+        } else if windowPosition == .custom {
+            // Center-anchored percentages: the dragged spot survives the
+            // panel growing or shrinking with its content.
+            setWindowOrigin(customOrigin(for: newSize))
         } else if windowPosition != .mousePos {
             let screen = window.screen ?? screenWithMouse()
             let origin = windowPosition.point(for: newSize, on: screen)
-            window.setFrameOrigin(origin)
+            setWindowOrigin(origin)
         }
     }
 
@@ -745,7 +847,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         windowConfig()
 
-        let contentView = NSHostingView(
+        let contentView = SwitcherHostingView(
             rootView: ContentView(appState: appState, appDelegate: self)
         )
         contentView.translatesAutoresizingMaskIntoConstraints = false
@@ -826,11 +928,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         window.publisher(for: \.isVisible)
             .removeDuplicates()
-            .sink { isVisible in
+            .sink { [weak self] isVisible in
                 if isVisible {
                     KeyboardShortcuts.enable([.hideMode, .quitMode, .normalMode])
                 } else {
                     KeyboardShortcuts.disable([.hideMode, .quitMode, .normalMode])
+                    // A drag may still be mid-flight (the native drag loop
+                    // outlives the panel being ordered out); drop it so the
+                    // ghost drag can't leak into a later summon or save.
+                    self?.cancelDragTracking()
                 }
             }
             .store(in: &cancellables)
@@ -838,6 +944,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupTapCacheRefresh()
         setupEventTap()
         setupAutoSelect()
+        setupWindowMoveTracking()
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
             [weak self] _ in
             guard let self = self else { return }
@@ -847,6 +954,153 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Watches the panel for the user dragging it anywhere it wasn't put.
+    ///
+    /// `.nonactivatingPanel` doesn't honor `isMovableByWindowBackground`, so a
+    /// settled drag is started explicitly with `performDrag(with:)` — the
+    /// native window-server drag, identical to dragging a title bar; the app
+    /// never positions the window itself here. A settled drag becomes the
+    /// saved Custom position (Pro). Free users get their placement snapped
+    /// back with an upgrade prompt instead.
+    func setupWindowMoveTracking() {
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleWindowDidMove()
+        }
+
+        NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
+        ) { [weak self] event in
+            guard let self, event.window === self.window else { return event }
+            switch event.type {
+            case .leftMouseDown:
+                self.isUserDraggingWindow = true
+                self.dragWasActive = false
+                self.pendingDragMouseDown = event
+            case .leftMouseDragged:
+                // First movement after the mouse-down: hand the original event
+                // to the window server. Plain taps never reach this path, so
+                // cell clicks stay cell clicks.
+                if let downEvent = self.pendingDragMouseDown, self.window.isVisible {
+                    self.pendingDragMouseDown = nil
+                    self.dragWasActive = true
+                    DispatchQueue.main.async { [weak self] in
+                        self?.window.performDrag(with: downEvent)
+                    }
+                }
+            case .leftMouseUp:
+                self.isUserDraggingWindow = false
+                self.pendingDragMouseDown = nil
+            default:
+                break
+            }
+            return event
+        }
+    }
+
+    private func handleWindowMoveTrackingGates() -> Bool {
+        guard !suppressMoveSaving else { return false }
+        guard window.isVisible else { return false }
+        guard !isOpenAnimating, !isClosingAnimated else { return false }
+        return true
+    }
+
+    private func handleWindowDidMove() {
+        guard handleWindowMoveTrackingGates() else { return }
+
+        // didMove also fires for non-drag relayouts; a save is only scheduled
+        // once a real drag has moved the panel.
+        guard dragWasActive, window.isVisible else { return }
+
+        lastDraggedFrame = window.frame
+        lastDraggedScreen = window.screen
+
+        let drag = DispatchWorkItem { [weak self] in
+            self?.commitDraggedPosition()
+        }
+        customPositionSaveWork?.cancel()
+        customPositionSaveWork = drag
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: drag)
+    }
+
+    /// Persists the last captured dragged frame as the Custom position,
+    /// anchored to the window's center. Idempotent: commits at most once per
+    /// drag session, whether from the debounce timer or a summon race-flush.
+    /// Never reads the live frame — the capture at `didMove` time is the
+    /// frame the user actually dropped it at.
+    private func commitDraggedPosition() {
+        guard let frame = lastDraggedFrame else { return }
+        customPositionSaveWork?.cancel()
+        customPositionSaveWork = nil
+        lastDraggedFrame = nil
+        dragWasActive = false
+
+        guard proState.isPro else {
+            // Free users see the snap-back only when the panel is still on
+            // screen; an aborted-by-minimize/hide drag is silently dropped.
+            if window.isVisible {
+                snapBackAfterFreeDrag()
+            }
+            return
+        }
+
+        guard let screen = lastDraggedScreen ?? NSScreen.screens.first,
+              screen.frame.width > 0, screen.frame.height > 0
+        else { return }
+        lastDraggedScreen = nil
+        let screenFrame = screen.frame
+
+        var xPercent = (frame.midX - screenFrame.minX) / screenFrame.width * 100
+        var yPercent = (frame.midY - screenFrame.minY) / screenFrame.height * 100
+
+        // Clamp so the summoned panel is guaranteed to land fully on-screen.
+        let halfW = frame.width / 2 / screenFrame.width * 100
+        let halfH = frame.height / 2 / screenFrame.height * 100
+        xPercent = min(max(xPercent, halfW), 100 - halfW)
+        yPercent = min(max(yPercent, halfH), 100 - halfH)
+
+        customPositionXPercent = xPercent
+        customPositionYPercent = yPercent
+        windowPosition = .custom
+    }
+
+    /// Abandons any in-flight drag tracking (scheduled commits included) —
+    /// used when the window hides: a drag that was still running must not
+    /// leak into a later summon.
+    private func cancelDragTracking() {
+        customPositionSaveWork?.cancel()
+        customPositionSaveWork = nil
+        lastDraggedFrame = nil
+        lastDraggedScreen = nil
+        dragWasActive = false
+        isUserDraggingWindow = false
+        pendingDragMouseDown = nil
+    }
+
+    /// Free users can drag but don't keep it: restore the placement the saved
+    /// preference produces and explain why.
+    private func snapBackAfterFreeDrag() {
+        positionWindow()
+        let alert = NSAlert()
+        alert.messageText = "Custom positioning is a Pro feature"
+        alert.informativeText = "Upgrade to Sxitch Pro to place the switcher anywhere by dragging it."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Get Sxitch Pro")
+        alert.addButton(withTitle: "Cancel")
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            if let sxitchUrl = URL(string: "https://sxitch.app/#download") {
+                NSWorkspace.shared.open(sxitchUrl)
+            }
+        }
+    }
+}
+
+/** MARK: section comment removed (methods now live in the extension) */
+extension AppDelegate {
     /// Keeps the event tap's snapshots current, on the main thread, so the callback itself
     /// never has to enumerate apps or windows.
     func setupTapCacheRefresh() {
