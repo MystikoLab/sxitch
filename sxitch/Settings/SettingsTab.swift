@@ -30,6 +30,7 @@ enum RegisteredTabs {
             content: AnyView(ManagementRulesSettingsView())
         ),
         AnySettingsTab(id: "modes", title: "All Modes", icon: "square.stack.3d.up", content: AnyView(AllModesSettingsView())),
+        AnySettingsTab(id: "alerts", title: "Alert behaviour", icon: "megaphone", content: AnyView(AlertsSettingsView())),
     ]
 
     static let themingTabs: [AnySettingsTab] = [

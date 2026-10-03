@@ -49,6 +49,11 @@ enum SettingsSearchIndex {
         // Modes
         SettingsSearchEntry(tabID: "modes", title: "All Modes", keywords: ["custom mode", "add mode", "mode hotkey", "editor"]),
 
+        // General › Alert behaviour
+        SettingsSearchEntry(tabID: "alerts", title: "Show action alerts", keywords: ["toast", "banner", "notification", "opening", "hiding", "quitting", "feedback"]),
+        SettingsSearchEntry(tabID: "alerts", title: "Alert Style", keywords: ["liquid glass", "material", "transparency", "appearance"]),
+        SettingsSearchEntry(tabID: "alerts", title: "Alert Position", keywords: ["bottom", "screen", "switcher", "placement"]),
+
         // Account
         SettingsSearchEntry(tabID: "account", title: "License Status", keywords: ["pro", "free", "activated"]),
         SettingsSearchEntry(tabID: "account", title: "Pro Mode", keywords: ["free mode", "disable pro", "debugging", "revert", "toggle"]),

@@ -199,10 +199,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "hapticCustomModeSwitch": true,
             "hapticOnboarding": true,
             "hapticPattern": HapticPattern.generic.rawValue,
+            "switchAlertsEnabled": true,
+            "switchAlertPosition": "screenBottom",
+            "switchAlertPadding": 12.0,
         ])
         if #available(macOS 26.0, *) {
             UserDefaults.standard.register(defaults: [
                 "liquidGlass": true,
+                "switchAlertStyle": "liquid",
             ])
         }
     }
@@ -836,6 +840,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         (window as! NSPanel).isFloatingPanel = true
+        window.identifier = NSUserInterfaceItemIdentifier("sxitch.switcher")
         window.isOpaque = false
         // The system's own open/close animation must be off: the switcher's
         // entrance is entirely SwiftUI/AppKit-controlled, and macOS's default

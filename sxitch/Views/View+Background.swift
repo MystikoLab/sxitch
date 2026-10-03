@@ -27,4 +27,20 @@ extension View {
             background(Color(nsColor: .windowBackgroundColor).opacity(0.4))
         }
     }
+
+    /// Capsule background for switch alerts. Honors the independent
+    /// "switchAlertStyle" setting: native Liquid Glass on macOS 26+, otherwise
+    /// the classic material look.
+    @ViewBuilder
+    func alertBackground() -> some View {
+        if #available(macOS 26.0, *),
+           UserDefaults.standard.string(forKey: "switchAlertStyle") == "liquid"
+        {
+            glassEffect(.regular, in: Capsule())
+        } else if #available(macOS 26.0, *) {
+            background(.ultraThinMaterial, in: Capsule())
+        } else {
+            background(.regularMaterial, in: Capsule())
+        }
+    }
 }
