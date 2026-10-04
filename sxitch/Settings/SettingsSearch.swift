@@ -21,6 +21,7 @@ enum SettingsSearchIndex {
         SettingsSearchEntry(tabID: "keyboard", title: "Key Overrides", keywords: ["remap", "keys", "custom"]),
 
         // General › App
+        SettingsSearchEntry(tabID: "app", title: "Tab based navigation", keywords: ["keyboard navigation", "tab", "arrow keys", "enter", "return", "selection"]),
         SettingsSearchEntry(tabID: "app", title: "Permissions", keywords: ["accessibility", "screen recording"]),
         SettingsSearchEntry(tabID: "app", title: "Launch at login", keywords: ["startup", "login items"]),
         SettingsSearchEntry(tabID: "app", title: "Revisit the setup guide", keywords: ["onboarding", "guide", "tour"]),

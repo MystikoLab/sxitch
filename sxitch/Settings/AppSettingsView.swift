@@ -9,6 +9,7 @@ struct AppSettingsView: View, SettingsTab {
     static let tabIcon = "gear"
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
+    @AppStorage("keyboardNavigationEnabled") private var tabBasedNavigation = true
     @Environment(\.openWindow) private var openWindow
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
     @State private var screenRecordingGranted: Bool = CGPreflightScreenCaptureAccess()
@@ -68,6 +69,15 @@ struct AppSettingsView: View, SettingsTab {
                     title: "Permissions",
                     tip: "Sxitch needs Accessibility to intercept the hotkey and switch apps, and Screen Recording to read app windows."
                 )
+            }
+
+            Section {
+                HStack {
+                    Toggle("Tab based navigation", isOn: $tabBasedNavigation)
+                    SettingInfoTip(
+                        text: "While the switcher is open, Tab or the arrow keys move the selection and Return switches to it. Shift+Tab moves backwards. The selection wraps around at the ends."
+                    )
+                }
             }
 
             Section {

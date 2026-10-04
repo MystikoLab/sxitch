@@ -4,8 +4,14 @@ struct RunningAppCell: View {
     let app: any SwitchableApp
     let depth: Int
     let onTap: (any SwitchableApp) -> Void
+    var isSelected: Bool = false
 
     @Environment(\.modeTheme) var modeTheme
+
+    private var accentColor: Color {
+        resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system")
+            ?? .accentColor
+    }
 
     var body: some View {
         VStack {
@@ -34,14 +40,22 @@ struct RunningAppCell: View {
                         .clipShape(RoundedRectangle(cornerRadius: 30))
                 }
             }
+            .padding(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 22)
+                    .strokeBorder(isSelected ? accentColor : .clear, lineWidth: 3)
+            )
+            .animation(.easeOut(duration: 0.12), value: isSelected)
+
             Text(app.appName)
-                .opacity(0.7)
+                .opacity(isSelected ? 1 : 0.7)
+                .fontWeight(isSelected ? .semibold : .regular)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .foregroundStyle(modeTheme.foregroundStyle)
         }
-        .frame(maxWidth: 60)
-        .padding(20)
+        .frame(maxWidth: 80)
+        .padding(12)
         .appContextMenu(for: app)
         .onTapGesture {
             if let override = app.overrideTap {

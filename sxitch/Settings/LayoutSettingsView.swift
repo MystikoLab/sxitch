@@ -277,13 +277,13 @@ struct LayoutShowcaseCard: View {
     private var layoutContent: some View {
         switch style {
         case "list":
-            ListAppLayout(apps: apps, typed: "", onTap: { _ in })
+            ListAppLayout(apps: apps, typed: "", onTap: { _ in }, selection: nil)
         case "circle":
-            CircleAppLayout(apps: apps, typed: "", onTap: { _ in })
+            CircleAppLayout(apps: apps, typed: "", onTap: { _ in }, selection: nil)
         case "scrollList":
-            ScrollableListAppLayout(apps: apps, typed: "", onTap: { _ in })
+            ScrollableListAppLayout(apps: apps, typed: "", onTap: { _ in }, selection: nil)
         default:
-            GridAppLayout(apps: apps, typed: "", onTap: { _ in })
+            GridAppLayout(apps: apps, typed: "", onTap: { _ in }, selection: nil)
         }
     }
 

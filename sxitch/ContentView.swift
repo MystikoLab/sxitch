@@ -32,6 +32,49 @@ struct ContentView: View {
         return openApps
     }
 
+    /// Entries after the typed-prefix filter — the same list every layout
+    /// renders, and the space keyboard selection moves through.
+    var filteredEntries: [any SwitchableApp] {
+        let typedLower = appState.typed.lowercased()
+        guard !typedLower.isEmpty else { return displayedEntries }
+        return displayedEntries.filter { $0.appName.lowercased().starts(with: typedLower) }
+    }
+
+    private var filteredDrillWindows: [WindowInfo] {
+        let typedLower = appState.typed.lowercased()
+        guard !typedLower.isEmpty else { return drillDownWindows }
+        return drillDownWindows.filter { $0.title.lowercased().starts(with: typedLower) }
+    }
+
+    private var keyboardNavigationEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "keyboardNavigationEnabled")
+    }
+
+    /// Puts the selection on the first visible entry, or clears it when
+    /// keyboard navigation is off.
+    private func resetSelection() {
+        if appState.drillDownApp != nil {
+            appState.selectedName = keyboardNavigationEnabled ? filteredDrillWindows.first?.title : nil
+        } else {
+            appState.selectedName = keyboardNavigationEnabled ? filteredEntries.first?.appName.lowercased() : nil
+        }
+    }
+
+    /// Keeps the selection pointing at something visible after the filter
+    /// changed underneath it.
+    private func clampSelection() {
+        guard keyboardNavigationEnabled else { return }
+        if appState.drillDownApp != nil {
+            if let selected = appState.selectedName, !filteredDrillWindows.contains(where: { $0.title == selected }) {
+                appState.selectedName = filteredDrillWindows.first?.title
+            }
+        } else {
+            if let selected = appState.selectedName, !filteredEntries.contains(where: { $0.appName.lowercased() == selected }) {
+                appState.selectedName = filteredEntries.first?.appName.lowercased()
+            }
+        }
+    }
+
     private var appContextActions: AppContextActions {
         AppContextActions(
             blacklist: blacklistApp,
@@ -48,10 +91,11 @@ struct ContentView: View {
         } else {
             if let drillApp = appState.drillDownApp {
                 WindowPickerView(
-                    windows: drillDownWindows,
+                    windows: filteredDrillWindows,
                     appName: drillApp.localizedName ?? "Unknown",
                     appIcon: drillApp.icon ?? NSImage(),
                     typed: appState.typed,
+                    selection: appState.selectedName,
                     onSelect: { appDelegate.closeWindow() }
                 )
                 .environment(\.modeTheme, ModeTheme.theme(for: appState.mode))
@@ -73,9 +117,10 @@ struct ContentView: View {
                         .frame(minWidth: 280, minHeight: 150)
                     } else {
                         AnyAppLayout(
-                            apps: displayedEntries,
+                            apps: filteredEntries,
                             typed: appState.typed,
                             onTap: handleAppTap,
+                            selection: appState.selectedName,
                             layoutStyle: layoutStyle
                         )
                     }
@@ -128,6 +173,7 @@ struct ContentView: View {
             ) { _ in
                 reloadEntries()
                 appDelegate.prepareOpenAnimation()
+                resetSelection()
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .openSettingsRequested)
@@ -177,8 +223,10 @@ struct ContentView: View {
                         reloadEntries()
                     }
                 }
+                resetSelection()
             }
             .onChange(of: appState.typed) { _, _ in
+                clampSelection()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     appDelegate.resizeWindowToFit()
                 }
@@ -195,6 +243,7 @@ struct ContentView: View {
                 } else {
                     drillDownWindows = []
                 }
+                resetSelection()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     appDelegate.resizeWindowToFit()
                 }

@@ -189,6 +189,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func registerDefaultSettings() {
         UserDefaults.standard.register(defaults: [
             "hotkey_keycode": 256,
+            "keyboardNavigationEnabled": true,
             "switcherAnimationStyle": SwitcherAnimation.fade.rawValue,
             "animationSpeedMultiplier": 1.0,
             "openCloseAnimationsEnabled": true,
@@ -646,6 +647,59 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         cacheLock.lock()
         defer { cacheLock.unlock() }
         return cachedDrillWindows
+    }
+
+    // MARK: Keyboard navigation (Tab / arrow keys / Return)
+
+    /// Names the selection can move through, respecting the current typed
+    /// filter — lowercased app names while picking apps, raw window titles
+    /// while drilling down. Read from the tap caches so a keypress never
+    /// enumerates apps or windows.
+    private func keyboardSelectableNames() -> [String] {
+        let typedLower = appState.typed.lowercased()
+        if appState.drillDownApp != nil {
+            return tapDrillWindows()
+                .filter { $0.title.lowercased().hasPrefix(typedLower) }
+                .map(\.title)
+        }
+        return tapAppNames().filter { $0.hasPrefix(typedLower) }
+    }
+
+    func moveKeyboardSelection(_ delta: Int) {
+        DispatchQueue.main.async {
+            let names = self.keyboardSelectableNames()
+            guard !names.isEmpty else {
+                self.appState.selectedName = nil
+                return
+            }
+            var index = names.firstIndex(of: self.appState.selectedName ?? "") ?? (delta > 0 ? -1 : 0)
+            // Wrap around: step past the ends loops back to the other side.
+            index = (index + delta + names.count) % names.count
+            self.appState.selectedName = names[index]
+        }
+    }
+
+    func activateKeyboardSelection() {
+        DispatchQueue.main.async {
+            guard let selected = self.appState.selectedName else { return }
+            if self.appState.drillDownApp != nil {
+                let typedLower = self.appState.typed.lowercased()
+                let visible = self.tapDrillWindows().filter {
+                    $0.title.lowercased().hasPrefix(typedLower)
+                }
+                guard let matching = visible.first(where: { $0.title == selected }) else { return }
+                let theme = ModeTheme.theme(for: self.appState.mode)
+                theme.windowAction(matching)
+                Haptics.perform(.switchApp)
+                self.appState.depth = 0
+                self.appState.typed = ""
+                if self.appState.mode == .normal {
+                    self.closeWindow()
+                }
+            } else {
+                self.selectCurrentApp(named: selected)
+            }
+        }
     }
 
     func selectCurrentApp(named: String) {
@@ -1335,6 +1389,42 @@ extension AppDelegate {
             return nil
         }
 
+        // Keyboard navigation while the switcher is open: Tab / arrows move the
+        // selection, Return activates it. Only when no (other) modifiers are
+        // held so the summon hotkey and system shortcuts keep working, and the
+        // keys are swallowed so they never reach the app behind the panel.
+        if type == .keyDown, window.isVisible,
+           UserDefaults.standard.bool(forKey: "keyboardNavigationEnabled")
+        {
+            let relevant = flags.intersection([.maskShift, .maskControl, .maskAlternate, .maskCommand])
+            // The summon hotkey (a specific key + modifiers) wins over nav keys.
+            let summonHeld =
+                savedKeycode != 256
+                    && keyCode == Int64(savedKeycode)
+                    && modifiersSatisfied(config: parseModifierConfig())
+            if !summonHeld {
+                if keyCode == 48, relevant.isEmpty {
+                    DispatchQueue.main.async { self.moveKeyboardSelection(+1) }
+                    return nil
+                }
+                if keyCode == 48, relevant == .maskShift {
+                    DispatchQueue.main.async { self.moveKeyboardSelection(-1) }
+                    return nil
+                }
+                if keyCode == 124, relevant.isEmpty {
+                    DispatchQueue.main.async { self.moveKeyboardSelection(+1) }
+                    return nil
+                }
+                if keyCode == 123, relevant.isEmpty {
+                    DispatchQueue.main.async { self.moveKeyboardSelection(-1) }
+                    return nil
+                }
+                if keyCode == 36 || keyCode == 76, relevant.isEmpty {
+                    DispatchQueue.main.async { self.activateKeyboardSelection() }
+                    return nil
+                }
+            }
+        }
         if savedKeycode == 256, type == .flagsChanged {
             let config = parseModifierConfig()
             let allHeld = modifiersSatisfied(config: config)

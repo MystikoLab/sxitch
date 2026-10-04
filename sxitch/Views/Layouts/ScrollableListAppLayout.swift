@@ -5,23 +5,39 @@ struct ScrollableListAppLayout: View {
     let apps: [any SwitchableApp]
     let typed: String
     let onTap: (any SwitchableApp) -> Void
-
-    private var filteredApps: [any SwitchableApp] {
-        apps.filter {
-            $0.appName.lowercased().starts(with: typed.lowercased())
-        }
-    }
+    var selection: String?
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
-                ForEach(filteredApps, id: \.id) { app in
-                    RunningAppListCell(app: app, depth: typed.count, onTap: onTap)
+        ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    ForEach(apps, id: \.id) { app in
+                        RunningAppListCell(
+                            app: app,
+                            depth: typed.count,
+                            onTap: onTap,
+                            isSelected: isSelected(app)
+                        )
+                        .id(app.id)
+                    }
+                }
+                .padding(6)
+            }
+            .onChange(of: selection) { _, newValue in
+                guard let newValue,
+                      let selected = apps.first(where: { $0.appName.lowercased() == newValue })
+                else { return }
+                withAnimation(.easeOut(duration: 0.12)) {
+                    proxy.scrollTo(selected.id, anchor: .center)
                 }
             }
-            .padding(6)
         }
         .frame(maxHeight: maxPanelHeight)
+    }
+
+    private func isSelected(_ app: any SwitchableApp) -> Bool {
+        guard let selection else { return false }
+        return app.appName.lowercased() == selection
     }
 
     /// The panel grows with content up to 75% of the screen height, then

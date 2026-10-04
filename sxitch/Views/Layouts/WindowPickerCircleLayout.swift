@@ -5,6 +5,7 @@ struct WindowPickerCircleLayout: View {
     let appName: String
     let appIcon: NSImage
     let typed: String
+    var selection: String?
     let onSelect: () -> Void
 
     @Environment(\.modeTheme) var modeTheme
@@ -180,9 +181,23 @@ struct WindowPickerCircleLayout: View {
         }
         .frame(width: slotSize - 16, height: slotSize - 16)
         .contentShape(Rectangle())
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(selectedColor.opacity(isSelected(window) ? 0.9 : 0), lineWidth: 3)
+        )
+        .animation(.easeOut(duration: 0.12), value: isSelected(window))
         .onTapGesture {
             modeTheme.windowAction(window)
             onSelect()
         }
+    }
+
+    private var selectedColor: Color {
+        resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system")
+            ?? .accentColor
+    }
+
+    private func isSelected(_ window: WindowInfo) -> Bool {
+        window.title == selection
     }
 }
