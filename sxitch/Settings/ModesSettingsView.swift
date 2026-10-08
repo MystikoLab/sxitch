@@ -395,13 +395,13 @@ struct ModeSettingsPage: View {
     private func pickAppBundle(mode: Binding<CustomMode>) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.applicationBundle]
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        panel.prompt = "Add App"
+        panel.prompt = "Add Apps"
         panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            addApp(bundleURL: url.absoluteString, mode: mode)
+            guard response == .OK, !panel.urls.isEmpty else { return }
+            addApps(urls: panel.urls, mode: mode)
         }
     }
 
@@ -482,11 +482,48 @@ struct ModeSettingsPage: View {
         }
     }
 
-    private func addApp(bundleURL: String, mode: Binding<CustomMode>) {
+    private func addApps(urls: [URL], mode: Binding<CustomMode>) {
+        let existing = Set(mode.wrappedValue.apps.map(\.bundleURL))
+        var added = 0
+        var skipped: [String] = []
         mutate(mode) { updated in
-            updated.apps.append(
-                ModeApp(bundleURL: bundleURL, displayName: displayName(for: bundleURL))
-            )
+            for url in urls {
+                let bundleURL = url.absoluteString
+                if existing.contains(bundleURL) {
+                    skipped.append(displayName(for: bundleURL))
+                    continue
+                }
+                updated.apps.append(
+                    ModeApp(bundleURL: bundleURL, displayName: displayName(for: bundleURL))
+                )
+                added += 1
+            }
+        }
+        if !skipped.isEmpty {
+            presentSkippedAlert(skippedNames: skipped, addedCount: added, mode: mode.wrappedValue)
+        }
+    }
+
+    private func presentSkippedAlert(
+        skippedNames: [String],
+        addedCount: Int,
+        mode: CustomMode
+    ) {
+        let alert = NSAlert()
+        alert.messageText = "Already in “\(mode.name)”"
+        let list = skippedNames.joined(separator: ", ")
+        if addedCount == 0 {
+            alert.informativeText = "These apps are already in this mode: \(list)"
+        } else {
+            alert.informativeText = "Added \(addedCount) app\(addedCount == 1 ? "" : "s"). Skipped (already in this mode): \(list)"
+        }
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+
+        if let window = NSApp.keyWindow {
+            alert.beginSheetModal(for: window)
+        } else {
+            alert.runModal()
         }
     }
 
