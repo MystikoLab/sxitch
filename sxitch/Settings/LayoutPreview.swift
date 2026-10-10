@@ -87,7 +87,7 @@ struct LayoutPreviewCard: View {
         switch style {
         case "list": return 3
         case "circle": return 5
-        case "search": return 3
+        case "scrollList": return 3
         default: return 4
         }
     }
@@ -97,7 +97,7 @@ struct LayoutPreviewCard: View {
         switch style {
         case "list": listPreview
         case "circle": circlePreview
-        case "search": searchPreview
+        case "scrollList": scrollListPreview
         default: gridPreview
         }
     }
@@ -133,26 +133,22 @@ struct LayoutPreviewCard: View {
         }
     }
 
-    private var searchPreview: some View {
+    private var scrollListPreview: some View {
         VStack(spacing: 4) {
-            SearchBarSlot()
-
-            VStack(spacing: 3) {
-                ForEach(0 ..< slotCount, id: \.self) { index in
-                    QuadSlot(isActive: activeIndex == index && isAnimating, isListRow: true, size: 9, tint: slotTint)
-                }
+            ForEach(0 ..< slotCount, id: \.self) { index in
+                QuadSlot(isActive: activeIndex == index && isAnimating, isListRow: true, tint: slotTint)
             }
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0.6),
-                        .init(color: .clear, location: 1.0),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
         }
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0.6),
+                    .init(color: .clear, location: 1.0),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
     }
 }
 
@@ -201,26 +197,5 @@ private struct QuadSlot: View {
                         lineWidth: 1
                     )
             )
-    }
-}
-
-private struct SearchBarSlot: View {
-    var body: some View {
-        HStack(spacing: 3) {
-            Circle()
-                .strokeBorder(Color.primary.opacity(0.4), lineWidth: 1)
-                .frame(width: 5, height: 5)
-
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(Color.primary.opacity(0.18))
-                .frame(height: 3)
-        }
-        .padding(.horizontal, 5)
-        .frame(height: 11)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 5)
-                .fill(Color.primary.opacity(0.07))
-        )
     }
 }

@@ -5,25 +5,21 @@ struct WindowPickerView: View {
     let appName: String
     let appIcon: NSImage
     let typed: String
+    let selection: String?
     let onSelect: () -> Void
 
     @Environment(\.modeTheme) var modeTheme
 
     @AppStorage("layoutStyle") private var layoutStyle: String = "grid"
 
-    var filtered: [WindowInfo] {
-        typed.isEmpty
-            ? windows
-            : windows.filter { $0.title.lowercased().starts(with: typed.lowercased()) }
-    }
-
     var body: some View {
         if layoutStyle == "circle" {
             WindowPickerCircleLayout(
-                windows: filtered,
+                windows: windows,
                 appName: appName,
                 appIcon: appIcon,
                 typed: typed,
+                selection: selection,
                 onSelect: onSelect
             )
         } else {
@@ -41,7 +37,7 @@ struct WindowPickerView: View {
                     .font(.headline)
                     .opacity(0.8)
                 Spacer()
-                Text("\(filtered.count) window\(filtered.count == 1 ? "" : "s")")
+                Text("\(windows.count) window\(windows.count == 1 ? "" : "s")")
                     .font(.caption)
                     .opacity(0.4)
             }
@@ -50,30 +46,36 @@ struct WindowPickerView: View {
 
             Divider().opacity(0.4)
 
-            if filtered.isEmpty {
+            if windows.isEmpty {
                 Text("No windows match")
                     .font(.subheadline)
                     .opacity(0.4)
                     .padding(24)
             } else if layoutStyle == "list" {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(filtered) { window in
-                            windowRow(window)
+                ScrollViewReader { _ in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(windows) { window in
+                                windowRow(window)
+                            }
                         }
                     }
+                    .scrollSelectionIntoView(selection, ids: windows.map(\.title))
                 }
             } else {
-                ScrollView {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 80, maximum: 100))],
-                        spacing: 12
-                    ) {
-                        ForEach(filtered) { window in
-                            windowGridCell(window)
+                ScrollViewReader { _ in
+                    ScrollView {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 80, maximum: 100))],
+                            spacing: 12
+                        ) {
+                            ForEach(windows) { window in
+                                windowGridCell(window)
+                            }
                         }
+                        .padding(12)
                     }
-                    .padding(12)
+                    .scrollSelectionIntoView(selection, ids: windows.map(\.title))
                 }
             }
         }
@@ -107,12 +109,19 @@ struct WindowPickerView: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(modeTheme.foregroundStyle)
-                .opacity(0.85)
+                .opacity(isSelected(window) ? 1 : 0.85)
+                .fontWeight(isSelected(window) ? .semibold : .regular)
         }
         .padding(8)
         .frame(maxWidth: .infinity)
         .contentShape(RoundedRectangle(cornerRadius: 12))
         .glassTile(cornerRadius: 12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(selectionColor.opacity(isSelected(window) ? 0.9 : 0), lineWidth: 3)
+        )
+        .animation(.easeOut(duration: 0.12), value: isSelected(window))
+        .id(window.title)
         .onTapGesture {
             modeTheme.windowAction(window)
             onSelect()
@@ -144,16 +153,57 @@ struct WindowPickerView: View {
             Text(window.title)
                 .lineLimit(1)
                 .foregroundStyle(modeTheme.foregroundStyle)
-                .opacity(0.85)
+                .opacity(isSelected(window) ? 1 : 0.85)
+                .fontWeight(isSelected(window) ? .semibold : .regular)
             Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 0)
+                .fill(selectionColor.opacity(isSelected(window) ? 0.18 : 0))
+        )
         .contentShape(Rectangle())
+        .id(window.title)
         .onTapGesture {
             modeTheme.windowAction(window)
             onSelect()
         }
         Divider().opacity(0.4)
+    }
+}
+
+/// Keeps the keyboard-selected window visible when the picker list scrolls.
+private extension View {
+    func scrollSelectionIntoView(_ selection: String?, ids: [String]) -> some View {
+        modifier(ScrollSelectionIntoView(selection: selection, ids: ids))
+    }
+}
+
+private struct ScrollSelectionIntoView: ViewModifier {
+    let selection: String?
+    let ids: [String]
+
+    func body(content: Content) -> some View {
+        ScrollViewReader { proxy in
+            content
+                .onChange(of: selection) { _, newValue in
+                    guard let newValue, ids.contains(newValue) else { return }
+                    withAnimation(.easeOut(duration: 0.12)) {
+                        proxy.scrollTo(newValue, anchor: .center)
+                    }
+                }
+        }
+    }
+}
+
+extension WindowPickerView {
+    var selectionColor: Color {
+        resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system")
+            ?? .accentColor
+    }
+
+    func isSelected(_ window: WindowInfo) -> Bool {
+        window.title == selection
     }
 }

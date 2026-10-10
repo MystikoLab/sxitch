@@ -9,8 +9,12 @@ struct ModeTheme {
     static let normal = ModeTheme(
         overlayColor: .clear,
         foregroundStyle: .primary,
-        appAction: { $0.activate() },
+        appAction: { app in
+            SwitchAlertController.shared.show(.opening, appName: app.appName)
+            app.activate()
+        },
         windowAction: { window in
+            SwitchAlertController.shared.show(.opening, appName: window.ownerApp.localizedName ?? "App")
             AXUIElementPerformAction(window.axElement, kAXRaiseAction as CFString)
             window.ownerApp.activate(options: [])
         }
@@ -19,8 +23,12 @@ struct ModeTheme {
     static let hide = ModeTheme(
         overlayColor: .orange.opacity(0.7),
         foregroundStyle: Color.orange.opacity(0.8),
-        appAction: { $0.hideApp() },
+        appAction: { app in
+            SwitchAlertController.shared.show(.hiding, appName: app.appName)
+            app.hideApp()
+        },
         windowAction: { window in
+            SwitchAlertController.shared.show(.hiding, appName: window.ownerApp.localizedName ?? "App")
             AXUIElementSetAttributeValue(
                 window.axElement, kAXMinimizedAttribute as CFString, true as CFTypeRef
             )
@@ -30,8 +38,12 @@ struct ModeTheme {
     static let quit = ModeTheme(
         overlayColor: .red.opacity(0.7),
         foregroundStyle: Color.red.opacity(0.8),
-        appAction: { $0.quitApp() },
+        appAction: { app in
+            SwitchAlertController.shared.show(.quitting, appName: app.appName)
+            app.quitApp()
+        },
         windowAction: { window in
+            SwitchAlertController.shared.show(.quitting, appName: window.ownerApp.localizedName ?? "App")
             var pid: pid_t = 0
             AXUIElementGetPid(window.axElement, &pid)
             if pid != 0 {

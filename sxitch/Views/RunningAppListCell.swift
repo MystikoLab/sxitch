@@ -4,8 +4,14 @@ struct RunningAppListCell: View {
     let app: any SwitchableApp
     let depth: Int
     let onTap: (any SwitchableApp) -> Void
+    var isSelected: Bool = false
 
     @Environment(\.modeTheme) var modeTheme
+
+    private var accentColor: Color {
+        resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system")
+            ?? .accentColor
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -38,13 +44,19 @@ struct RunningAppListCell: View {
             Text(app.appName)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .opacity(0.7)
+                .opacity(isSelected ? 1 : 0.7)
+                .fontWeight(isSelected ? .semibold : .regular)
                 .foregroundStyle(modeTheme.foregroundStyle)
 
             Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(accentColor.opacity(isSelected ? 0.9 : 0), lineWidth: 2)
+        )
+        .animation(.easeOut(duration: 0.12), value: isSelected)
         .contentShape(Rectangle())
         .appContextMenu(for: app)
         .onTapGesture {

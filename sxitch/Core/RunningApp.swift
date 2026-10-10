@@ -11,6 +11,7 @@ struct RunningApp: SwitchableApp, Equatable {
     }
 
     var appName: String
+    var realName: String
     var app: NSRunningApplication
     var icon: NSImage
     var bundleUrl: URL?
@@ -35,6 +36,7 @@ struct RunningApp: SwitchableApp, Equatable {
                 let finalisedName = appRenames[appName.lowercased()] ?? appName
                 return RunningApp(
                     appName: finalisedName,
+                    realName: appName,
                     app: app,
                     icon: customIcon ?? app.icon ?? NSImage(),
                     bundleUrl: app.bundleURL,

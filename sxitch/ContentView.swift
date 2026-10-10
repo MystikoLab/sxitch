@@ -5,7 +5,7 @@ struct ContentView: View {
     @State private var openApps: [any SwitchableApp] = RunningApp.fetchRunningApps()
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
 
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modeTheme) private var modeTheme
 
@@ -32,6 +32,49 @@ struct ContentView: View {
         return openApps
     }
 
+    /// Entries after the typed-prefix filter — the same list every layout
+    /// renders, and the space keyboard selection moves through.
+    var filteredEntries: [any SwitchableApp] {
+        let typedLower = appState.typed.lowercased()
+        guard !typedLower.isEmpty else { return displayedEntries }
+        return displayedEntries.filter { $0.appName.lowercased().starts(with: typedLower) }
+    }
+
+    private var filteredDrillWindows: [WindowInfo] {
+        let typedLower = appState.typed.lowercased()
+        guard !typedLower.isEmpty else { return drillDownWindows }
+        return drillDownWindows.filter { $0.title.lowercased().starts(with: typedLower) }
+    }
+
+    private var keyboardNavigationEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "keyboardNavigationEnabled")
+    }
+
+    /// Puts the selection on the first visible entry, or clears it when
+    /// keyboard navigation is off.
+    private func resetSelection() {
+        if appState.drillDownApp != nil {
+            appState.selectedName = keyboardNavigationEnabled ? filteredDrillWindows.first?.title : nil
+        } else {
+            appState.selectedName = keyboardNavigationEnabled ? filteredEntries.first?.appName.lowercased() : nil
+        }
+    }
+
+    /// Keeps the selection pointing at something visible after the filter
+    /// changed underneath it.
+    private func clampSelection() {
+        guard keyboardNavigationEnabled else { return }
+        if appState.drillDownApp != nil {
+            if let selected = appState.selectedName, !filteredDrillWindows.contains(where: { $0.title == selected }) {
+                appState.selectedName = filteredDrillWindows.first?.title
+            }
+        } else {
+            if let selected = appState.selectedName, !filteredEntries.contains(where: { $0.appName.lowercased() == selected }) {
+                appState.selectedName = filteredEntries.first?.appName.lowercased()
+            }
+        }
+    }
+
     private var appContextActions: AppContextActions {
         AppContextActions(
             blacklist: blacklistApp,
@@ -48,10 +91,11 @@ struct ContentView: View {
         } else {
             if let drillApp = appState.drillDownApp {
                 WindowPickerView(
-                    windows: drillDownWindows,
+                    windows: filteredDrillWindows,
                     appName: drillApp.localizedName ?? "Unknown",
                     appIcon: drillApp.icon ?? NSImage(),
                     typed: appState.typed,
+                    selection: appState.selectedName,
                     onSelect: { appDelegate.closeWindow() }
                 )
                 .environment(\.modeTheme, ModeTheme.theme(for: appState.mode))
@@ -73,9 +117,10 @@ struct ContentView: View {
                         .frame(minWidth: 280, minHeight: 150)
                     } else {
                         AnyAppLayout(
-                            apps: displayedEntries,
+                            apps: filteredEntries,
                             typed: appState.typed,
                             onTap: handleAppTap,
+                            selection: appState.selectedName,
                             layoutStyle: layoutStyle
                         )
                     }
@@ -127,11 +172,13 @@ struct ContentView: View {
                 NotificationCenter.default.publisher(for: .switcherWillShow)
             ) { _ in
                 reloadEntries()
+                appDelegate.prepareOpenAnimation()
+                resetSelection()
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .openSettingsRequested)
             ) { _ in
-                openSettings()
+                openWindow(id: "settings")
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .customModesChanged)
@@ -176,8 +223,10 @@ struct ContentView: View {
                         reloadEntries()
                     }
                 }
+                resetSelection()
             }
             .onChange(of: appState.typed) { _, _ in
+                clampSelection()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     appDelegate.resizeWindowToFit()
                 }
@@ -194,6 +243,7 @@ struct ContentView: View {
                 } else {
                     drillDownWindows = []
                 }
+                resetSelection()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     appDelegate.resizeWindowToFit()
                 }
@@ -238,14 +288,60 @@ struct ContentView: View {
 
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         let newName = input.stringValue.trimmingCharacters(in: .whitespaces)
-        let key = currentName.lowercased()
-        var renames = UserDefaults.standard.appRenames
-        if newName.isEmpty || newName == currentName {
-            renames.removeValue(forKey: key)
+
+        if let pinned = app as? PinnedApp {
+            renameModeEntry(pinned, newName: newName)
         } else {
-            renames[key] = newName
+            renameRunningApp(app, newName: newName, currentName: currentName)
+        }
+    }
+
+    /// Entries backed by a custom-mode app are renamed by editing that entry's
+    /// own display name in place, matched by its UUID so a rename survives the
+    /// name change itself.
+    private func renameModeEntry(_ pinned: PinnedApp, newName: String) {
+        guard !newName.isEmpty else { return }
+        let entryID = pinned.modeApp.id
+        var modes = CustomModeStore.load()
+        guard let modeIndex = modes.firstIndex(where: { mode in
+            mode.apps.contains(where: { $0.id == entryID })
+        }) else { return }
+        guard let appIndex = modes[modeIndex].apps.firstIndex(where: { $0.id == entryID }) else { return }
+        if modes[modeIndex].apps[appIndex].displayName == newName {
+            return
+        }
+        modes[modeIndex].apps[appIndex].displayName = newName
+        CustomModeStore.save(modes)
+        NotificationCenter.default.post(name: .customModesChanged, object: nil)
+        reloadEntries()
+    }
+
+    /// Running apps are renamed through the global `app_renames` rules, keyed
+    /// by the app's real name — the same key the name lookup reads when the
+    /// switcher is populated. Re-renaming therefore edits the existing rule
+    /// instead of writing a new one that can never match.
+    private func renameRunningApp(_ app: any SwitchableApp, newName: String, currentName: String) {
+        let realKey = app.realName.lowercased()
+        var renames = UserDefaults.standard.appRenames
+        if newName == currentName {
+            // Nothing changed: leave any existing rule alone.
+            return
+        }
+        if newName.isEmpty || newName == app.realName {
+            // Clearing the field or typing the original name reverts the rename.
+            renames.removeValue(forKey: realKey)
+        } else {
+            renames[realKey] = newName
+        }
+        // The app may be displayed under a rename or prefix strip, so a rule
+        // written by earlier versions (keyed by the displayed name) may exist
+        // alongside the corrected one. Clear any such stale entry.
+        let displayedKey = currentName.lowercased()
+        if displayedKey != realKey {
+            renames.removeValue(forKey: displayedKey)
         }
         UserDefaults.standard.appRenames = renames
+        NotificationCenter.default.post(name: .appRenamesChanged, object: nil)
         NotificationCenter.default.post(name: .appSettingsChanged, object: nil)
         reloadEntries()
     }

@@ -3,6 +3,17 @@ import Combine
 import KeyboardShortcuts
 import SwiftUI
 
+/// NSHostingView only reports "this click can move the window" where the
+/// SwiftUI hit-test finds no content, and the full-bleed panel content
+/// (material background + clip) defeats that — leaving
+/// `isMovableByWindowBackground` dead. Forcing YES restores background
+/// dragging; a plain click (no movement) still reaches the app cells.
+final class SwitcherHostingView: NSHostingView<ContentView> {
+    override var mouseDownCanMoveWindow: Bool {
+        true
+    }
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     var appState = AppState()
     var window: NSWindow!
@@ -41,13 +52,60 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let familyRightCodes: [Int] = [61, 54, 60, 62, 57]
 
     private func windowConfig() {
-        window.level = NSWindow.Level(NSWindow.Level.floating.rawValue + 200)
+        window.level = NSWindow.Level(NSWindow.Level.floating.rawValue + 100)
 
         window.collectionBehavior = [
             .canJoinAllSpaces,
-            .stationary,
-            .fullScreenAuxiliary,
         ]
+    }
+
+    /// macOS periodically re-parents windows back to their original space — after
+    /// sleep/wake, screen-lock/unlock, display hot-plugs and Mission Control —
+    /// dropping the window's `canJoinAllSpaces` behavior in the process. Re-applying
+    /// the config on every summon and on those system events is the known fix:
+    /// setting the same values is cheap and keeps the switcher following spaces.
+    @objc func reapplyWindowBehavior() {
+        guard window != nil else { return }
+        windowConfig()
+    }
+
+    private func observeSpaceRelinquishingSystemEvents() {
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+        // Screen lock/unlock and login-window transitions.
+        workspaceCenter.addObserver(
+            self,
+            selector: #selector(reapplyWindowBehavior),
+            name: NSWorkspace.sessionDidResignActiveNotification,
+            object: nil
+        )
+        workspaceCenter.addObserver(
+            self,
+            selector: #selector(reapplyWindowBehavior),
+            name: NSWorkspace.sessionDidBecomeActiveNotification,
+            object: nil
+        )
+        // Sleep/wake.
+        workspaceCenter.addObserver(
+            self,
+            selector: #selector(reapplyWindowBehavior),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+        // Switching spaces re-homes windows; re-asserting here repairs the
+        // behavior before the next summon instead of after a restart.
+        workspaceCenter.addObserver(
+            self,
+            selector: #selector(reapplyWindowBehavior),
+            name: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil
+        )
+        // Display hot-plug / resolution change.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reapplyWindowBehavior),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
     }
 
     private func parseModifierConfig() -> [(family: Int, side: String)] {
@@ -131,17 +189,258 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func registerDefaultSettings() {
         UserDefaults.standard.register(defaults: [
             "hotkey_keycode": 256,
+            "keyboardNavigationEnabled": true,
+            "switcherAnimationStyle": SwitcherAnimation.fade.rawValue,
+            "animationSpeedMultiplier": 1.0,
+            "openCloseAnimationsEnabled": true,
+            "hapticsEnabled": true,
+            "hapticShowUp": true,
+            "hapticSwitchApp": true,
+            "hapticModeSwitch": true,
+            "hapticCustomModeSwitch": true,
+            "hapticOnboarding": true,
+            "hapticPattern": HapticPattern.generic.rawValue,
+            "switchAlertsEnabled": true,
+            "switchAlertPosition": "screenBottom",
+            "switchAlertPadding": 12.0,
         ])
         if #available(macOS 26.0, *) {
             UserDefaults.standard.register(defaults: [
                 "liquidGlass": true,
+                "switchAlertStyle": "liquid",
             ])
         }
     }
 
+    private var isClosingAnimated = false
+    private var isOpenAnimating = false
+    /// Final placement snapshotted by `prepareOpenAnimation` for animated
+    /// styles that temporarily offset the window (slide).
+    private var pendingOpenFrame: NSRect?
+    /// Debounces the burst of `didMove` notifications while a drag is in
+    /// flight; only the settled frame is saved as the custom position.
+    private var customPositionSaveWork: DispatchWorkItem?
+    /// True between mouse-down and mouse-up on the panel so `didMove` can
+    /// tell a user drag from a window-server relayout. Cleared on mouse-up;
+    /// pending saves are gated on `dragWasActive` instead so they survive it.
+    private var isUserDraggingWindow = false
+    /// True once a drag produced at least one move; lets the debounced save
+    /// run after mouse-up without its own suppression gate tripping it.
+    private var dragWasActive = false
+    /// The panel mouse-down held back until movement proves it's a drag, at
+    /// which point it starts the native window-server drag loop for us.
+    private var pendingDragMouseDown: NSEvent?
+    /// Frame and screen captured on the last drag `didMove` — committed as
+    /// the Custom position, immune to any repositioning in between (e.g. a
+    /// summon that lands inside the save debounce window).
+    private var lastDraggedFrame: NSRect?
+    private var lastDraggedScreen: NSScreen?
+
+    /// Called at `.switcherWillShow` time, i.e. *before* the window is
+    /// ordered front. Both styles are driven at the NSWindow level: the
+    /// SwiftUI id-swap approach races with compositing and produced a
+    /// full-opacity first frame instead of motion.
+    func prepareOpenAnimation() {
+        isOpenAnimating = false
+        pendingOpenFrame = nil
+        guard SwitcherAnimation.enabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+
+        let style = SwitcherAnimation.current
+        let frame = window.frame
+
+        switch style {
+        case .fade:
+            window.alphaValue = 0
+        case .slide:
+            pendingOpenFrame = frame
+            window.alphaValue = 0
+            // Start 24pt below the final position: `playOpenAnimation` then
+            // animates the frame up while fading in, like a doc slide.
+            window.setFrame(
+                NSRect(origin: NSPoint(x: frame.origin.x, y: frame.origin.y - SwitcherAnimation.slideOffset), size: frame.size),
+                display: false
+            )
+        case .drop:
+            pendingOpenFrame = frame
+            window.alphaValue = 0.85
+            // Start above the final position; playOpenAnimation falls onto it
+            // with a small settle bounce.
+            window.setFrame(
+                NSRect(origin: NSPoint(x: frame.origin.x, y: frame.origin.y + SwitcherAnimation.dropOffset), size: frame.size),
+                display: false
+            )
+        case .scale:
+            pendingOpenFrame = frame
+            window.alphaValue = 0
+            // Start at ~90% size, centered on the final frame.
+            let factor = SwitcherAnimation.scaleStartFactor
+            let startSize = NSSize(width: frame.width * factor, height: frame.height * factor)
+            let startOrigin = NSPoint(
+                x: frame.origin.x + (frame.width - startSize.width) / 2,
+                y: frame.origin.y + (frame.height - startSize.height) / 2
+            )
+            window.setFrame(NSRect(origin: startOrigin, size: startSize), display: false)
+        }
+        isOpenAnimating = true
+    }
+
+    /// Plays the AppKit-side entrance immediately after the window has been
+    /// ordered front. Fade replicates the macOS default window appearance;
+    /// slide rises 24pt with a fade. Call on every summon path, right after
+    /// `orderFrontRegardless`. Also guarantees the snap-to-final state when
+    /// animations are disabled or reduced-motion is on.
+    func playOpenAnimation() {
+        let targetFrame = pendingOpenFrame ?? window.frame
+        pendingOpenFrame = nil
+
+        func finish() {
+            isOpenAnimating = false
+            window.alphaValue = 1
+            window.setFrame(targetFrame, display: false)
+            resizeWindowToFit(force: true)
+        }
+
+        guard SwitcherAnimation.enabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            finish()
+            return
+        }
+
+        let style = SwitcherAnimation.current
+        let duration = style.openDuration * SwitcherAnimation.speed
+
+        if style == .drop {
+            // Two stages: fall onto (slightly past) the target, then settle
+            // back up. Reads as a drop with a bounce instead of a plain move.
+            let overshootFrame = NSRect(
+                origin: NSPoint(
+                    x: targetFrame.origin.x,
+                    y: targetFrame.origin.y - SwitcherAnimation.dropOvershoot
+                ),
+                size: targetFrame.size
+            )
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration * 0.7
+                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                window.animator().alphaValue = 0.95
+                window.animator().setFrame(overshootFrame, display: false)
+            } completionHandler: {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = duration * 0.3
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    self.window.animator().alphaValue = 1
+                    self.window.animator().setFrame(targetFrame, display: false)
+                } completionHandler: {
+                    self.isOpenAnimating = false
+                    self.resizeWindowToFit()
+                }
+            }
+            return
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window.animator().alphaValue = 1
+            if style == .slide || style == .scale {
+                window.animator().setFrame(targetFrame, display: false)
+            }
+        } completionHandler: {
+            self.isOpenAnimating = false
+            self.resizeWindowToFit()
+        }
+    }
+
+    /// Closes the switcher, playing the configured close animation for the
+    /// current style (fade matches the macOS-native appearance; slide mirrors
+    /// its open motion). The state reset must happen before the AppKit fade
+    /// so SwiftUI doesn't try to animate the content collapse while the
+    /// window is fading out.
+    func closeWindowAnimated() {
+        guard window.isVisible else { return }
+        appState.typed = ""
+        appState.depth = 0
+        appState.mode = .normal
+        appState.activeModeID = nil
+        appState.drillDownApp = nil
+        userState.shared.demoSwitcherVisible = false
+
+        // An open animation still in flight: snap everything to the final
+        // state and disappear; racing an entrance with an exit looks broken.
+        guard !isOpenAnimating else {
+            isOpenAnimating = false
+            pendingOpenFrame = nil
+            window.orderOut(nil)
+            window.alphaValue = 1
+            return
+        }
+
+        let style = SwitcherAnimation.current
+
+        guard SwitcherAnimation.enabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            window.orderOut(nil)
+            return
+        }
+        guard !isClosingAnimated else {
+            window.orderOut(nil)
+            return
+        }
+        isClosingAnimated = true
+
+        let duration = style.closeDuration * SwitcherAnimation.speed
+        let originalFrame = window.frame
+
+        // Exit frame for styles the reverse their entrance: slide falls, drop
+        // rises, scale shrinks centered.
+        var exitFrame = originalFrame
+        switch style {
+        case .fade:
+            break
+        case .slide:
+            exitFrame.origin.y -= SwitcherAnimation.slideOffset
+        case .drop:
+            exitFrame.origin.y += SwitcherAnimation.dropOffset
+        case .scale:
+            let factor = SwitcherAnimation.scaleStartFactor
+            let size = NSSize(width: originalFrame.width * factor, height: originalFrame.height * factor)
+            exitFrame = NSRect(
+                origin: NSPoint(
+                    x: originalFrame.origin.x + (originalFrame.width - size.width) / 2,
+                    y: originalFrame.origin.y + (originalFrame.height - size.height) / 2
+                ),
+                size: size
+            )
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            context.allowsImplicitAnimation = true
+            window.animator().alphaValue = 0
+            if style != .fade {
+                window.animator().setFrame(exitFrame, display: false)
+            }
+        } completionHandler: {
+            self.window.orderOut(nil)
+            self.window.alphaValue = 1
+            self.window.setFrame(originalFrame, display: false)
+            self.isClosingAnimated = false
+        }
+    }
+
     func applicationWillFinishLaunching(_: Notification) {
+        migrateLayoutStyle()
         registerDefaultSettings()
         NSApp.setActivationPolicy(.accessory)
+    }
+
+    /// The "Search" layout was replaced by "Scrollable List"; carry existing
+    /// users over so their saved choice doesn't fall back to Grid. Must run
+    /// before any view reads the "layoutStyle" AppStorage key.
+    private func migrateLayoutStyle() {
+        let defaults = UserDefaults.standard
+        if defaults.string(forKey: "layoutStyle") == "search" {
+            defaults.set("scrollList", forKey: "layoutStyle")
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
@@ -149,14 +448,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func closeWindow() {
-        guard window.isVisible else { return }
-        appState.typed = ""
-        appState.depth = 0
-        appState.mode = .normal
-        appState.activeModeID = nil
-        appState.drillDownApp = nil
-        window.orderOut(nil)
-        userState.shared.demoSwitcherVisible = false
+        closeWindowAnimated()
     }
 
     /// True only while the onboarding window is actually on screen. Closing
@@ -175,11 +467,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             closeWindow()
         } else {
             windowConfig()
+            observeSpaceRelinquishingSystemEvents()
             positionWindow()
             NotificationCenter.default.post(name: .switcherWillShow, object: nil)
             userState.shared.demoSwitcherVisible = true
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
+            playOpenAnimation()
         }
     }
 
@@ -206,6 +500,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
                 self.appState.mode = self.appState.mode == mode ? .normal : mode
             }
+            Haptics.perform(.modeSwitch)
         }
     }
 
@@ -256,6 +551,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func toggleCustomMode(_ id: String) {
         guard CustomModeStore.load().contains(where: { $0.id.uuidString == id }) else { return }
         DispatchQueue.main.async {
+            Haptics.perform(.customModeSwitch)
             if self.window.isVisible {
                 if self.appState.activeModeID == id {
                     // Same mode again: toggle the window closed.
@@ -281,6 +577,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.appState.depth = 0
                 }
                 self.window.alphaValue = 0
+                self.reapplyWindowBehavior()
                 self.window.orderFrontRegardless()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0 / 60.0) {
                     // A fast toggle may have closed or replaced the mode in the meantime.
@@ -291,7 +588,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.resizeWindowToFit(force: true)
                     self.positionWindow()
                     NotificationCenter.default.post(name: .switcherWillShow, object: nil)
-                    self.window.alphaValue = 1
+                    self.playOpenAnimation()
                 }
             }
         }
@@ -352,34 +649,96 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return cachedDrillWindows
     }
 
+    // MARK: Keyboard navigation (Tab / arrow keys / Return)
+
+    /// Names the selection can move through, respecting the current typed
+    /// filter — lowercased app names while picking apps, raw window titles
+    /// while drilling down. Read from the tap caches so a keypress never
+    /// enumerates apps or windows.
+    private func keyboardSelectableNames() -> [String] {
+        let typedLower = appState.typed.lowercased()
+        if appState.drillDownApp != nil {
+            return tapDrillWindows()
+                .filter { $0.title.lowercased().hasPrefix(typedLower) }
+                .map(\.title)
+        }
+        return tapAppNames().filter { $0.hasPrefix(typedLower) }
+    }
+
+    func moveKeyboardSelection(_ delta: Int) {
+        DispatchQueue.main.async {
+            let names = self.keyboardSelectableNames()
+            guard !names.isEmpty else {
+                self.appState.selectedName = nil
+                return
+            }
+            var index = names.firstIndex(of: self.appState.selectedName ?? "") ?? (delta > 0 ? -1 : 0)
+            // Wrap around: step past the ends loops back to the other side.
+            index = (index + delta + names.count) % names.count
+            self.appState.selectedName = names[index]
+        }
+    }
+
+    func activateKeyboardSelection() {
+        DispatchQueue.main.async {
+            guard let selected = self.appState.selectedName else { return }
+            if self.appState.drillDownApp != nil {
+                let typedLower = self.appState.typed.lowercased()
+                let visible = self.tapDrillWindows().filter {
+                    $0.title.lowercased().hasPrefix(typedLower)
+                }
+                guard let matching = visible.first(where: { $0.title == selected }) else { return }
+                let theme = ModeTheme.theme(for: self.appState.mode)
+                theme.windowAction(matching)
+                Haptics.perform(.switchApp)
+                self.appState.depth = 0
+                self.appState.typed = ""
+                if self.appState.mode == .normal {
+                    self.closeWindow()
+                }
+            } else {
+                self.selectCurrentApp(named: selected)
+            }
+        }
+    }
+
     func selectCurrentApp(named: String) {
         let entries = currentEntries()
         guard let entry = entries.first(where: { $0.appName.lowercased() == named }) else { return }
         let theme = ModeTheme.theme(for: appState.mode)
         let windowPickerEnabled = UserDefaults.standard.bool(forKey: "windowPickerEnabled")
+        var didSwitch = false
 
         if let running = entry.runningApplication {
             let windows = fetchWindowsForApp(running)
             if windows.count == 1 {
                 theme.windowAction(windows[0])
+                didSwitch = true
                 if appState.mode == .normal {
                     closeWindow()
                 }
-            } else if windows.count > 1, proState.isPro, windowPickerEnabled {
+            } else if windows.count > 1, proState.isPro,
+                      windowPickerEnabled
+            {
                 appState.drillDownApp = running
             } else {
                 theme.appAction(entry)
+                didSwitch = true
                 if appState.mode == .normal {
                     closeWindow()
                 }
             }
         } else {
             theme.appAction(entry)
+            didSwitch = true
             if appState.mode == .normal {
                 closeWindow()
             }
         }
 
+        if didSwitch {
+            Haptics.perform(.switchApp)
+        }
         appState.depth = 0
         appState.typed = ""
     }
@@ -390,6 +749,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return Position(rawValue: raw) ?? .default
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "windowPosition") }
+    }
+
+    /// Custom ("drag to place") placement, stored as percentages of the
+    /// screen the window was dropped on, anchored to the window's center so
+    /// the spot survives the panel growing or shrinking with its content.
+    var customPositionXPercent: Double {
+        get { UserDefaults.standard.double(forKey: "customPositionXPercent") }
+        set { UserDefaults.standard.set(newValue, forKey: "customPositionXPercent") }
+    }
+
+    var customPositionYPercent: Double {
+        get { UserDefaults.standard.double(forKey: "customPositionYPercent") }
+        set { UserDefaults.standard.set(newValue, forKey: "customPositionYPercent") }
+    }
+
+    private var hasCustomPositionCoordinates: Bool {
+        UserDefaults.standard.object(forKey: "customPositionXPercent") != nil
+    }
+
+    /// Clearing the coordinates keeps "Custom" from outliving the position it
+    /// stood for: leaving Custom in settings discards them, so a later
+    /// re-entry is only possible by dragging again. Static so the settings
+    /// view can reach it without a reference to this delegate instance.
+    static func discardCustomPositionCoordinatesStatic() {
+        UserDefaults.standard.removeObject(forKey: "customPositionXPercent")
+        UserDefaults.standard.removeObject(forKey: "customPositionYPercent")
+    }
+
+    /// True while the app itself is moving the window (summon placement,
+    /// resize re-anchoring, animation offsets) so those moves are never
+    /// mistaken for the user dragging it into a custom spot.
+    private var suppressMoveSaving = false
+
+    /// Every programmatic origin change goes through here; `didMove` fires
+    /// for these too and relies on the guard.
+    private func setWindowOrigin(_ origin: NSPoint) {
+        suppressMoveSaving = true
+        window.setFrameOrigin(origin)
+        suppressMoveSaving = false
     }
 
     func screenWithMouse() -> NSScreen {
@@ -406,6 +804,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func positionWindow() {
+        // A drag that settled just before this summon (release → quick summon,
+        // inside the commit debounce) is flushed first so placement uses the
+        // position the panel was actually dropped at, not the stale one.
+        if dragWasActive {
+            commitDraggedPosition()
+        }
         if windowPosition == .default {
             window.center()
         } else if windowPosition == .mousePos {
@@ -423,17 +827,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             origin.x = min(max(origin.x, visible.minX), visible.maxX - size.width)
             origin.y = min(max(origin.y, visible.minY), visible.maxY - size.height)
 
-            window.setFrameOrigin(origin)
+            setWindowOrigin(origin)
+        } else if windowPosition == .custom {
+            setWindowOrigin(customOrigin(for: window.frame.size))
         } else {
             let screen = screenWithMouse()
             let size = window.frame.size
             let origin = windowPosition.point(for: size, on: screen)
-            window.setFrameOrigin(origin)
+            setWindowOrigin(origin)
         }
+    }
+
+    /// Screen-frame placement for the dragged position. Percentages anchor the
+    /// window's center; missing coordinates (should only happen if storage was
+    /// cleared under a still-selected Custom) fall back to centered so the
+    /// panel never gets stuck off-screen or at (0, 0).
+    private func customOrigin(for size: NSSize) -> NSPoint {
+        guard hasCustomPositionCoordinates else {
+            let screen = screenWithMouse()
+            return NSPoint(
+                x: screen.frame.origin.x + (screen.frame.width - size.width) / 2,
+                y: screen.frame.origin.y + (screen.frame.height - size.height) / 2
+            )
+        }
+        let screen = screenWithMouse()
+        let frame = screen.frame
+        let clampedX = min(max(customPositionXPercent, 0), 100)
+        let clampedY = min(max(customPositionYPercent, 0), 100)
+        return NSPoint(
+            x: frame.origin.x + frame.width * clampedX / 100 - size.width / 2,
+            y: frame.origin.y + frame.height * clampedY / 100 - size.height / 2
+        )
     }
 
     func resizeWindowToFit(force: Bool = false) {
         guard force || window.isVisible else { return }
+        // Repositioning mid-entrance would snap the animated frame.
+        guard !isOpenAnimating else { return }
         guard let hostingView = window.contentView else { return }
         hostingView.layoutSubtreeIfNeeded()
         let newSize = hostingView.fittingSize
@@ -445,10 +875,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         if windowPosition == .default {
             window.center()
+        } else if windowPosition == .custom {
+            // Center-anchored percentages: the dragged spot survives the
+            // panel growing or shrinking with its content.
+            setWindowOrigin(customOrigin(for: newSize))
         } else if windowPosition != .mousePos {
             let screen = window.screen ?? screenWithMouse()
             let origin = windowPosition.point(for: newSize, on: screen)
-            window.setFrameOrigin(origin)
+            setWindowOrigin(origin)
         }
     }
 
@@ -460,14 +894,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         (window as! NSPanel).isFloatingPanel = true
+        window.identifier = NSUserInterfaceItemIdentifier("sxitch.switcher")
         window.isOpaque = false
+        // The system's own open/close animation must be off: the switcher's
+        // entrance is entirely SwiftUI/AppKit-controlled, and macOS's default
+        // window-appear fade otherwise stacks on top of it.
+        window.animationBehavior = .none
         resizeWindowToFit()
         window.backgroundColor = .clear
         window.isMovableByWindowBackground = true
 
         windowConfig()
 
-        let contentView = NSHostingView(
+        let contentView = SwitcherHostingView(
             rootView: ContentView(appState: appState, appDelegate: self)
         )
         contentView.translatesAutoresizingMaskIntoConstraints = false
@@ -495,8 +934,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 .filter { $0.identifier?.rawValue == "onboarding" }
                 .forEach { $0.close() }
             NotificationCenter.default.post(name: .switcherWillShow, object: nil)
+            self.reapplyWindowBehavior()
             self.window.makeKeyAndOrderFront(nil)
             self.window.orderFrontRegardless()
+            self.playOpenAnimation()
         }
 
         NotificationCenter.default.addObserver(
@@ -546,11 +987,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         window.publisher(for: \.isVisible)
             .removeDuplicates()
-            .sink { isVisible in
+            .sink { [weak self] isVisible in
                 if isVisible {
                     KeyboardShortcuts.enable([.hideMode, .quitMode, .normalMode])
                 } else {
                     KeyboardShortcuts.disable([.hideMode, .quitMode, .normalMode])
+                    // A drag may still be mid-flight (the native drag loop
+                    // outlives the panel being ordered out); drop it so the
+                    // ghost drag can't leak into a later summon or save.
+                    self?.cancelDragTracking()
                 }
             }
             .store(in: &cancellables)
@@ -558,6 +1003,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupTapCacheRefresh()
         setupEventTap()
         setupAutoSelect()
+        setupWindowMoveTracking()
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
             [weak self] _ in
             guard let self = self else { return }
@@ -567,6 +1013,153 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Watches the panel for the user dragging it anywhere it wasn't put.
+    ///
+    /// `.nonactivatingPanel` doesn't honor `isMovableByWindowBackground`, so a
+    /// settled drag is started explicitly with `performDrag(with:)` — the
+    /// native window-server drag, identical to dragging a title bar; the app
+    /// never positions the window itself here. A settled drag becomes the
+    /// saved Custom position (Pro). Free users get their placement snapped
+    /// back with an upgrade prompt instead.
+    func setupWindowMoveTracking() {
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleWindowDidMove()
+        }
+
+        NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
+        ) { [weak self] event in
+            guard let self, event.window === self.window else { return event }
+            switch event.type {
+            case .leftMouseDown:
+                self.isUserDraggingWindow = true
+                self.dragWasActive = false
+                self.pendingDragMouseDown = event
+            case .leftMouseDragged:
+                // First movement after the mouse-down: hand the original event
+                // to the window server. Plain taps never reach this path, so
+                // cell clicks stay cell clicks.
+                if let downEvent = self.pendingDragMouseDown, self.window.isVisible {
+                    self.pendingDragMouseDown = nil
+                    self.dragWasActive = true
+                    DispatchQueue.main.async { [weak self] in
+                        self?.window.performDrag(with: downEvent)
+                    }
+                }
+            case .leftMouseUp:
+                self.isUserDraggingWindow = false
+                self.pendingDragMouseDown = nil
+            default:
+                break
+            }
+            return event
+        }
+    }
+
+    private func handleWindowMoveTrackingGates() -> Bool {
+        guard !suppressMoveSaving else { return false }
+        guard window.isVisible else { return false }
+        guard !isOpenAnimating, !isClosingAnimated else { return false }
+        return true
+    }
+
+    private func handleWindowDidMove() {
+        guard handleWindowMoveTrackingGates() else { return }
+
+        // didMove also fires for non-drag relayouts; a save is only scheduled
+        // once a real drag has moved the panel.
+        guard dragWasActive, window.isVisible else { return }
+
+        lastDraggedFrame = window.frame
+        lastDraggedScreen = window.screen
+
+        let drag = DispatchWorkItem { [weak self] in
+            self?.commitDraggedPosition()
+        }
+        customPositionSaveWork?.cancel()
+        customPositionSaveWork = drag
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: drag)
+    }
+
+    /// Persists the last captured dragged frame as the Custom position,
+    /// anchored to the window's center. Idempotent: commits at most once per
+    /// drag session, whether from the debounce timer or a summon race-flush.
+    /// Never reads the live frame — the capture at `didMove` time is the
+    /// frame the user actually dropped it at.
+    private func commitDraggedPosition() {
+        guard let frame = lastDraggedFrame else { return }
+        customPositionSaveWork?.cancel()
+        customPositionSaveWork = nil
+        lastDraggedFrame = nil
+        dragWasActive = false
+
+        guard proState.isPro else {
+            // Free users see the snap-back only when the panel is still on
+            // screen; an aborted-by-minimize/hide drag is silently dropped.
+            if window.isVisible {
+                snapBackAfterFreeDrag()
+            }
+            return
+        }
+
+        guard let screen = lastDraggedScreen ?? NSScreen.screens.first,
+              screen.frame.width > 0, screen.frame.height > 0
+        else { return }
+        lastDraggedScreen = nil
+        let screenFrame = screen.frame
+
+        var xPercent = (frame.midX - screenFrame.minX) / screenFrame.width * 100
+        var yPercent = (frame.midY - screenFrame.minY) / screenFrame.height * 100
+
+        // Clamp so the summoned panel is guaranteed to land fully on-screen.
+        let halfW = frame.width / 2 / screenFrame.width * 100
+        let halfH = frame.height / 2 / screenFrame.height * 100
+        xPercent = min(max(xPercent, halfW), 100 - halfW)
+        yPercent = min(max(yPercent, halfH), 100 - halfH)
+
+        customPositionXPercent = xPercent
+        customPositionYPercent = yPercent
+        windowPosition = .custom
+    }
+
+    /// Abandons any in-flight drag tracking (scheduled commits included) —
+    /// used when the window hides: a drag that was still running must not
+    /// leak into a later summon.
+    private func cancelDragTracking() {
+        customPositionSaveWork?.cancel()
+        customPositionSaveWork = nil
+        lastDraggedFrame = nil
+        lastDraggedScreen = nil
+        dragWasActive = false
+        isUserDraggingWindow = false
+        pendingDragMouseDown = nil
+    }
+
+    /// Free users can drag but don't keep it: restore the placement the saved
+    /// preference produces and explain why.
+    private func snapBackAfterFreeDrag() {
+        positionWindow()
+        let alert = NSAlert()
+        alert.messageText = "Custom positioning is a Pro feature"
+        alert.informativeText = "Upgrade to Sxitch Pro to place the switcher anywhere by dragging it."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Get Sxitch Pro")
+        alert.addButton(withTitle: "Cancel")
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            if let sxitchUrl = URL(string: "https://sxitch.app/#download") {
+                NSWorkspace.shared.open(sxitchUrl)
+            }
+        }
+    }
+}
+
+/** MARK: section comment removed (methods now live in the extension) */
+extension AppDelegate {
     /// Keeps the event tap's snapshots current, on the main thread, so the callback itself
     /// never has to enumerate apps or windows.
     func setupTapCacheRefresh() {
@@ -796,6 +1389,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return nil
         }
 
+        // Keyboard navigation while the switcher is open: Tab / arrows move the
+        // selection, Return activates it. Only when no (other) modifiers are
+        // held so the summon hotkey and system shortcuts keep working, and the
+        // keys are swallowed so they never reach the app behind the panel.
+        if type == .keyDown, window.isVisible,
+           UserDefaults.standard.bool(forKey: "keyboardNavigationEnabled")
+        {
+            let relevant = flags.intersection([.maskShift, .maskControl, .maskAlternate, .maskCommand])
+            // The summon hotkey (a specific key + modifiers) wins over nav keys.
+            let summonHeld =
+                savedKeycode != 256
+                    && keyCode == Int64(savedKeycode)
+                    && modifiersSatisfied(config: parseModifierConfig())
+            if !summonHeld {
+                if keyCode == 48, relevant.isEmpty {
+                    DispatchQueue.main.async { self.moveKeyboardSelection(+1) }
+                    return nil
+                }
+                if keyCode == 48, relevant == .maskShift {
+                    DispatchQueue.main.async { self.moveKeyboardSelection(-1) }
+                    return nil
+                }
+                if keyCode == 124, relevant.isEmpty {
+                    DispatchQueue.main.async { self.moveKeyboardSelection(+1) }
+                    return nil
+                }
+                if keyCode == 123, relevant.isEmpty {
+                    DispatchQueue.main.async { self.moveKeyboardSelection(-1) }
+                    return nil
+                }
+                if keyCode == 36 || keyCode == 76, relevant.isEmpty {
+                    DispatchQueue.main.async { self.activateKeyboardSelection() }
+                    return nil
+                }
+            }
+        }
         if savedKeycode == 256, type == .flagsChanged {
             let config = parseModifierConfig()
             let allHeld = modifiersSatisfied(config: config)
@@ -821,9 +1450,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     if self.window.isVisible {
                         self.closeWindow()
                     } else {
+                        self.reapplyWindowBehavior()
                         self.positionWindow()
                         NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                         self.window.orderFrontRegardless()
+                        self.playOpenAnimation()
+                        Haptics.perform(.showUp)
                     }
                 }
                 return nil
@@ -867,6 +1499,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         let theme = ModeTheme.theme(for: appState.mode)
                         DispatchQueue.main.async {
                             theme.windowAction(matchingWindows[0])
+                            Haptics.perform(.switchApp)
                             self.appState.depth = 0
                             self.appState.typed = ""
                             if self.appState.mode == .normal {
@@ -923,9 +1556,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     if self.window.isVisible {
                         self.closeWindow()
                     } else {
+                        self.reapplyWindowBehavior()
                         self.positionWindow()
                         NotificationCenter.default.post(name: .switcherWillShow, object: nil)
                         self.window.orderFrontRegardless()
+                        self.playOpenAnimation()
+                        Haptics.perform(.showUp)
                     }
                 }
                 return nil

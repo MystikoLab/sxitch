@@ -4,6 +4,7 @@ struct CircleAppLayout: View {
     let apps: [any SwitchableApp]
     let typed: String
     let onTap: (any SwitchableApp) -> Void
+    var selection: String?
 
     @Environment(\.modeTheme) var modeTheme
 
@@ -11,20 +12,16 @@ struct CircleAppLayout: View {
     private let ringGap: CGFloat = 20 // clearance BETWEEN ring edges, not center-to-center
     private let ringIncrement: Int = 5 // ring N's capacity = ringIncrement * N
 
-    private var filtered: [any SwitchableApp] {
-        apps.filter { $0.appName.lowercased().starts(with: typed.lowercased()) }
-    }
-
     /// Ring 1 holds 5, ring 2 holds 10, ring 3 holds 15, etc.
     private var rings: [[any SwitchableApp]] {
         var result: [[any SwitchableApp]] = []
         var startIndex = 0
         var ringNumber = 1
 
-        while startIndex < filtered.count {
+        while startIndex < apps.count {
             let capacity = ringIncrement * ringNumber
-            let endIndex = min(startIndex + capacity, filtered.count)
-            result.append(Array(filtered[startIndex ..< endIndex]))
+            let endIndex = min(startIndex + capacity, apps.count)
+            result.append(Array(apps[startIndex ..< endIndex]))
             startIndex = endIndex
             ringNumber += 1
         }
@@ -103,9 +100,19 @@ struct CircleAppLayout: View {
                 let x = r * CGFloat(cos(angle))
                 let y = r * CGFloat(sin(angle))
 
-                RunningAppCell(app: app, depth: typed.count, onTap: onTap)
-                    .offset(x: x, y: y)
+                RunningAppCell(
+                    app: app,
+                    depth: typed.count,
+                    onTap: onTap,
+                    isSelected: isSelected(app)
+                )
+                .offset(x: x, y: y)
             }
         }
+    }
+
+    private func isSelected(_ app: any SwitchableApp) -> Bool {
+        guard let selection else { return false }
+        return app.appName.lowercased() == selection
     }
 }

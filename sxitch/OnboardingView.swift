@@ -157,6 +157,7 @@ struct OnboardingView: View {
                     .keyboardShortcut(keyboardShortcutIfAllowed(.rightArrow))
                 } else {
                     Button("Get Started") {
+                        Haptics.perform(.onboarding)
                         hasCompletedOnboarding = true
                         NotificationCenter.default.post(name: .onboardingCompleted, object: nil)
                     }
@@ -204,12 +205,14 @@ struct OnboardingView: View {
     }
 
     private func goBack() {
+        Haptics.perform(.onboarding)
         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
             currentPage = OnboardingPage(rawValue: max(0, pageIndex - 1)) ?? .welcome
         }
     }
 
     private func advance() {
+        Haptics.perform(.onboarding)
         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
             if let next = OnboardingPage(rawValue: pageIndex + 1) {
                 currentPage = next
@@ -608,7 +611,7 @@ struct TutorialFeaturesPage: View {
                 FeatureShowcaseRow(
                     icon: "sparkle.magnifyingglass",
                     title: "Search & custom modes",
-                    description: "A search-first layout, key overrides, blacklists, and custom modes.",
+                    description: "A scrollable list layout, key overrides, blacklists, and custom modes.",
                     tint: accent
                 )
             }
@@ -651,8 +654,8 @@ struct TutorialLayoutPage: View {
                 LayoutPreviewCard(style: "circle", label: "Circle", isSelected: layoutStyle == "circle", slotTint: .white) {
                     layoutStyle = "circle"
                 }
-                LayoutPreviewCard(style: "search", label: "Search", isSelected: layoutStyle == "search", slotTint: .white) {
-                    layoutStyle = "search"
+                LayoutPreviewCard(style: "scrollList", label: "Scrollable List", isSelected: layoutStyle == "scrollList", slotTint: .white) {
+                    layoutStyle = "scrollList"
                 }
             }
             .padding(.vertical, 4)
@@ -853,6 +856,7 @@ struct LicensePage: View {
             let success = try await activateKey(key: cleanedKey)
             if success {
                 appState.isPro = true
+                appState.hasValidLicense = true
                 licenseKey = ""
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                     justActivated = true

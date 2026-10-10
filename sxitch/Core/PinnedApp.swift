@@ -13,6 +13,10 @@ struct PinnedApp: SwitchableApp {
         modeApp.displayName
     }
 
+    var realName: String {
+        appName
+    }
+
     var symbolName: String? {
         switch modeApp.icon {
         case let .system(name):

@@ -10,6 +10,7 @@ import Security
 
 let APP_NAME = "Sxitch"
 private let POLAR_API_BASE = "https://api.polar.sh/v1/customer-portal/license-keys"
+let LICENSE_INFO_URL = "https://sxitch.app/api/license-info"
 private let ORGANIZATION_ID = "a2f08c52-6a41-4dc1-9b56-a5ea683b37b3"
 
 struct PolarKeyActivationReq: Encodable {
@@ -93,6 +94,16 @@ struct PolarKeyValidateRes: Decodable {
     }
 }
 
+struct LicenseInfoReq: Encodable {
+    let licenseKey: String
+}
+
+struct LicenseInfo: Decodable {
+    let email: String
+    let activationsUsed: Int
+    let activationLimit: Int
+}
+
 func activateKey(key: String) async throws -> Bool {
     let reqBody = PolarKeyActivationReq(
         key: key,
@@ -154,6 +165,27 @@ func validateKey(key: String, activationId: String) async throws -> Bool {
 
     let body = try JSONDecoder().decode(PolarKeyValidateRes.self, from: data)
     return body.status == "granted"
+}
+
+func fetchLicenseInfo(key: String) async throws -> LicenseInfo {
+    let reqBody = LicenseInfoReq(licenseKey: key)
+
+    guard let url = URL(string: LICENSE_INFO_URL) else {
+        throw URLError(.badURL)
+    }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = try JSONEncoder().encode(reqBody)
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+
+    guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
+        throw URLError(.badServerResponse)
+    }
+
+    return try JSONDecoder().decode(LicenseInfo.self, from: data)
 }
 
 // MARK: - Keychain Service Helpers (Keyring Alternative)

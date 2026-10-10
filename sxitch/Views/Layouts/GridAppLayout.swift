@@ -4,17 +4,12 @@ struct GridAppLayout: View {
     let apps: [any SwitchableApp]
     let typed: String
     let onTap: (any SwitchableApp) -> Void
+    var selection: String?
 
     @Environment(\.modeTheme) var modeTheme
 
-    private var filteredApps: [any SwitchableApp] {
-        apps.filter {
-            $0.appName.lowercased().starts(with: typed.lowercased())
-        }
-    }
-
     private var chunkedApps: [[any SwitchableApp]] {
-        filteredApps.chunkedEvenly(maxPerRow: 10)
+        apps.chunkedEvenly(maxPerRow: 10)
     }
 
     var body: some View {
@@ -22,12 +17,22 @@ struct GridAppLayout: View {
             ForEach(chunkedApps.indices, id: \.self) { rowIndex in
                 HStack {
                     ForEach(chunkedApps[rowIndex], id: \.id) { app in
-                        RunningAppCell(app: app, depth: typed.count, onTap: onTap)
+                        RunningAppCell(
+                            app: app,
+                            depth: typed.count,
+                            onTap: onTap,
+                            isSelected: isSelected(app)
+                        )
                     }
                 }
             }
         }
         .frame(alignment: .center)
+    }
+
+    private func isSelected(_ app: any SwitchableApp) -> Bool {
+        guard let selection else { return false }
+        return app.appName.lowercased() == selection
     }
 }
 
