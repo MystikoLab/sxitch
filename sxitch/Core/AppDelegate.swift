@@ -12,6 +12,34 @@ final class SwitcherHostingView: NSHostingView<ContentView> {
     override var mouseDownCanMoveWindow: Bool {
         true
     }
+
+    /// Called whenever SwiftUI has committed a layout whose fitting size no
+    /// longer matches the window's content size — the switcher panel then
+    /// resizes in the same update cycle so the frame never lags behind the
+    /// visible content.
+    var resizeHandler: (() -> Void)?
+
+    /// Re-entrancy guard: resizing the window triggers another layout pass.
+    private var isResizing = false
+
+    override func layout() {
+        super.layout()
+        guard !isResizing else { return }
+        let newSize = fittingSize
+        guard newSize.width > 0, newSize.height > 0,
+              let window, window.contentView != nil,
+              window.frame.size != newSize
+        else { return }
+        // Defer one tick: fires after layout settles, coalesces several
+        // passes in a single frame, and keeps setFrame out of the live
+        // layout pass.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !isResizing, let handler = resizeHandler else { return }
+            isResizing = true
+            handler()
+            isResizing = false
+        }
+    }
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -236,11 +264,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastDraggedFrame: NSRect?
     private var lastDraggedScreen: NSScreen?
 
-    /// Called at `.switcherWillShow` time, i.e. *before* the window is
-    /// ordered front. Both styles are driven at the NSWindow level: the
-    /// SwiftUI id-swap approach races with compositing and produced a
-    /// full-opacity first frame instead of motion.
-    func prepareOpenAnimation() {
+    /// The summon waiting for SwiftUI to commit; cancelled if the panel is
+    /// closed before it gets to reveal anything.
+    private var pendingPresentation: DispatchWorkItem?
+
+    /// How long a transparent panel waits for SwiftUI to commit new content.
+    private static let layoutCommitDelay = 2.0 / 60.0
+
+    /// Every summon path ends here. The entries are reloaded while the panel
+    /// is transparent, and it is sized, placed and revealed only after SwiftUI
+    /// has committed them — the first visible frame is always the final one,
+    /// instead of the previous summon's size re-centering on screen.
+    func presentSwitcher(makeKey: Bool = false) {
+        pendingPresentation?.cancel()
+        isOpenAnimating = false
+        pendingOpenFrame = nil
+        window.alphaValue = 0
+        NotificationCenter.default.post(name: .switcherWillShow, object: nil)
+        if makeKey {
+            window.makeKeyAndOrderFront(nil)
+        }
+        window.orderFrontRegardless()
+
+        let reveal = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            pendingPresentation = nil
+            resizeWindowToFit(force: true)
+            positionWindow()
+            prepareOpenAnimation()
+            playOpenAnimation()
+        }
+        pendingPresentation = reveal
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.layoutCommitDelay, execute: reveal)
+    }
+
+    /// Called once the panel has its final frame, just before it is revealed.
+    /// Both styles are driven at the NSWindow level: the SwiftUI id-swap
+    /// approach races with compositing and produced a full-opacity first
+    /// frame instead of motion.
+    private func prepareOpenAnimation() {
         isOpenAnimating = false
         pendingOpenFrame = nil
         guard SwitcherAnimation.enabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
@@ -289,7 +351,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// slide rises 24pt with a fade. Call on every summon path, right after
     /// `orderFrontRegardless`. Also guarantees the snap-to-final state when
     /// animations are disabled or reduced-motion is on.
-    func playOpenAnimation() {
+    private func playOpenAnimation() {
         let targetFrame = pendingOpenFrame ?? window.frame
         pendingOpenFrame = nil
 
@@ -363,6 +425,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.activeModeID = nil
         appState.drillDownApp = nil
         userState.shared.demoSwitcherVisible = false
+
+        // Closed before the reveal: nothing has been visible yet.
+        if let pendingPresentation {
+            pendingPresentation.cancel()
+            self.pendingPresentation = nil
+            window.orderOut(nil)
+            window.alphaValue = 1
+            return
+        }
 
         // An open animation still in flight: snap everything to the final
         // state and disappear; racing an entrance with an exit looks broken.
@@ -468,12 +539,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             windowConfig()
             observeSpaceRelinquishingSystemEvents()
-            positionWindow()
-            NotificationCenter.default.post(name: .switcherWillShow, object: nil)
             userState.shared.demoSwitcherVisible = true
-            window.makeKeyAndOrderFront(nil)
-            window.orderFrontRegardless()
-            playOpenAnimation()
+            presentSwitcher(makeKey: true)
         }
     }
 
@@ -566,9 +633,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.resizeWindowToFit(force: true)
                 }
             } else {
-                // Hidden: swap content while the panel is transparent, then size and show
-                // it only after SwiftUI has committed the new layout — the first visible
-                // frame is always the final custom-mode content.
+                // Hidden: swap content before the summon so its first visible frame is
+                // already the custom-mode content.
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
                 withTransaction(transaction) {
@@ -576,20 +642,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.appState.typed = ""
                     self.appState.depth = 0
                 }
-                self.window.alphaValue = 0
                 self.reapplyWindowBehavior()
-                self.window.orderFrontRegardless()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0 / 60.0) {
-                    // A fast toggle may have closed or replaced the mode in the meantime.
-                    guard self.appState.activeModeID == id, self.window.isVisible else {
-                        self.window.alphaValue = 1
-                        return
-                    }
-                    self.resizeWindowToFit(force: true)
-                    self.positionWindow()
-                    NotificationCenter.default.post(name: .switcherWillShow, object: nil)
-                    self.playOpenAnimation()
-                }
+                self.presentSwitcher()
             }
         }
     }
@@ -867,22 +921,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let hostingView = window.contentView else { return }
         hostingView.layoutSubtreeIfNeeded()
         let newSize = hostingView.fittingSize
-        guard newSize.width > 0, newSize.height > 0 else { return }
         let currentFrame = window.frame
-        window.setFrame(
-            NSRect(origin: currentFrame.origin, size: newSize),
-            display: false
-        )
+        guard newSize.width > 0, newSize.height > 0,
+              currentFrame.size != newSize
+        else { return }
+        // Resolve the re-anchored origin for the new size first so resize and
+        // repositioning land in the same frame instead of snapping, then jumping.
         if windowPosition == .default {
+            window.setFrame(
+                NSRect(origin: window.frame.origin, size: newSize),
+                display: false
+            )
+            // Same runloop tick, so the centered move shares the frame with
+            // the resize; center()'s placement math is left to AppKit.
             window.center()
-        } else if windowPosition == .custom {
-            // Center-anchored percentages: the dragged spot survives the
-            // panel growing or shrinking with its content.
-            setWindowOrigin(customOrigin(for: newSize))
-        } else if windowPosition != .mousePos {
-            let screen = window.screen ?? screenWithMouse()
-            let origin = windowPosition.point(for: newSize, on: screen)
-            setWindowOrigin(origin)
+        } else {
+            var targetOrigin = window.frame.origin
+            if windowPosition == .custom {
+                // Center-anchored percentages: the dragged spot survives the
+                // panel growing or shrinking with its content.
+                targetOrigin = customOrigin(for: newSize)
+            } else if windowPosition != .mousePos {
+                let screen = window.screen ?? screenWithMouse()
+                targetOrigin = windowPosition.point(for: newSize, on: screen)
+            }
+            window.setFrame(NSRect(origin: targetOrigin, size: newSize), display: false)
         }
     }
 
@@ -910,6 +973,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: ContentView(appState: appState, appDelegate: self)
         )
         contentView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.resizeHandler = { [weak self] in
+            self?.resizeWindowToFit()
+        }
         window.contentView = contentView
 
         window.hasShadow = true
@@ -933,11 +999,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.windows
                 .filter { $0.identifier?.rawValue == "onboarding" }
                 .forEach { $0.close() }
-            NotificationCenter.default.post(name: .switcherWillShow, object: nil)
             self.reapplyWindowBehavior()
-            self.window.makeKeyAndOrderFront(nil)
-            self.window.orderFrontRegardless()
-            self.playOpenAnimation()
+            self.presentSwitcher(makeKey: true)
         }
 
         NotificationCenter.default.addObserver(
@@ -1451,10 +1514,7 @@ extension AppDelegate {
                         self.closeWindow()
                     } else {
                         self.reapplyWindowBehavior()
-                        self.positionWindow()
-                        NotificationCenter.default.post(name: .switcherWillShow, object: nil)
-                        self.window.orderFrontRegardless()
-                        self.playOpenAnimation()
+                        self.presentSwitcher()
                         Haptics.perform(.showUp)
                     }
                 }
@@ -1557,10 +1617,7 @@ extension AppDelegate {
                         self.closeWindow()
                     } else {
                         self.reapplyWindowBehavior()
-                        self.positionWindow()
-                        NotificationCenter.default.post(name: .switcherWillShow, object: nil)
-                        self.window.orderFrontRegardless()
-                        self.playOpenAnimation()
+                        self.presentSwitcher()
                         Haptics.perform(.showUp)
                     }
                 }
