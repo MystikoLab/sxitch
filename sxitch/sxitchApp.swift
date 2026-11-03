@@ -34,11 +34,7 @@ struct sxitchApp: App {
             Label("Version: \(Bundle.main.appVersion)", systemImage: "number.circle")
             Button("Show", systemImage: "eye.fill") {
                 appDelegate.reapplyWindowBehavior()
-                appDelegate.positionWindow()
-                NotificationCenter.default.post(name: .switcherWillShow, object: nil)
-                appDelegate.window.makeKeyAndOrderFront(nil)
-                appDelegate.window.orderFrontRegardless()
-                appDelegate.playOpenAnimation()
+                appDelegate.presentSwitcher(makeKey: true)
             }
             Divider()
             Button("Github", systemImage: "chevron.left.forwardslash.chevron.right") {

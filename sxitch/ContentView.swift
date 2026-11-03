@@ -172,7 +172,6 @@ struct ContentView: View {
                 NotificationCenter.default.publisher(for: .switcherWillShow)
             ) { _ in
                 reloadEntries()
-                appDelegate.prepareOpenAnimation()
                 resetSelection()
             }
             .onReceive(
@@ -225,17 +224,6 @@ struct ContentView: View {
                 }
                 resetSelection()
             }
-            .onChange(of: appState.typed) { _, _ in
-                clampSelection()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    appDelegate.resizeWindowToFit()
-                }
-            }
-            .onChange(of: layoutStyle) { _, _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    appDelegate.resizeWindowToFit()
-                }
-            }
             .onChange(of: appState.drillDownApp) { _, newApp in
                 if let app = newApp {
                     drillDownWindows = fetchWindowsForApp(app)
@@ -244,9 +232,6 @@ struct ContentView: View {
                     drillDownWindows = []
                 }
                 resetSelection()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    appDelegate.resizeWindowToFit()
-                }
             }
             .task {
                 if !userState.shared.isPro {
@@ -258,9 +243,6 @@ struct ContentView: View {
 
     func reloadEntries() {
         openApps = appDelegate.currentEntries()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            appDelegate.resizeWindowToFit()
-        }
     }
 
     private func blacklistApp(_ app: any SwitchableApp) {
