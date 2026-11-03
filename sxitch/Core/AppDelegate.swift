@@ -610,12 +610,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         for url in pinnedURLs where !runningURLs.contains(url) {
             let path = URL(string: url)?.path ?? url
-            let name = FileManager.default.displayName(atPath: path)
+            let name = RunningApp.typeableName(
+                localizedName: FileManager.default.displayName(atPath: path),
+                bundleURL: URL(fileURLWithPath: path),
+                bundleID: Bundle(path: path)?.bundleIdentifier
+            )
             entries.append(
                 PinnedApp(
                     modeApp: ModeApp(
                         bundleURL: url,
-                        displayName: name.isEmpty ? "App" : name
+                        displayName: name
                     )
                 )
             )
