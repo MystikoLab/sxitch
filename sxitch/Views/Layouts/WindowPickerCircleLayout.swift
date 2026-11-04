@@ -13,6 +13,7 @@ struct WindowPickerCircleLayout: View {
     private let centerDiscSize: CGFloat = 150
     private let tileIconSize: CGFloat = 44
     private let slotSize: CGFloat = 110
+    private let ringEdgeSoftness: CGFloat = 1.5 // glass rim feather, in points
     private let ringGap: CGFloat = 20 // clearance BETWEEN ring edges, not center-to-center
     private let ringIncrement: Int = 5
 
@@ -112,7 +113,7 @@ struct WindowPickerCircleLayout: View {
                 .opacity(0.5)
         }
         .frame(width: centerDiscSize, height: centerDiscSize)
-        .background(Circle().fill(.ultraThinMaterial))
+        .glassSurface(in: Circle())
         .contentShape(Circle())
     }
 
@@ -125,19 +126,15 @@ struct WindowPickerCircleLayout: View {
         let spacing = totalAngle / Double(segments)
 
         ZStack {
-            ForEach(Array(ringWindows.enumerated()), id: \.element.id) { index, _ in
-                let t = Double(index) / Double(segments)
-                let angle = startAngle + t * totalAngle
-                let halfSpan = spacing / 2
-
-                ArcSegment(
-                    innerRadius: r - slotSize / 2,
-                    outerRadius: r + slotSize / 2,
-                    startAngle: Angle(radians: angle - halfSpan),
-                    endAngle: Angle(radians: angle + halfSpan)
-                )
-                .fill(.ultraThinMaterial)
-            }
+            // One arc per ring filled once, so the material samples the
+            // backdrop as a single surface instead of tinting per slot.
+            let lastAngle = startAngle + Double(max(count - 1, 0)) / Double(segments) * totalAngle
+            Color.clear.glassSurface(in: ArcSegment(
+                innerRadius: r - slotSize / 2,
+                outerRadius: r + slotSize / 2,
+                startAngle: Angle(radians: startAngle - spacing / 2),
+                endAngle: Angle(radians: lastAngle + spacing / 2)
+            ), edgeSoftness: ringEdgeSoftness)
 
             ForEach(Array(ringWindows.enumerated()), id: \.element.id) { index, window in
                 let t = Double(index) / Double(segments)

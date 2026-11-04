@@ -5,6 +5,9 @@ struct RunningAppCell: View {
     let depth: Int
     let onTap: (any SwitchableApp) -> Void
     var isSelected: Bool = false
+    /// Pads the icon so the selection outline has room. Layouts can turn this
+    /// off when keyboard navigation is disabled and nothing is ever selected.
+    var reservesSelectionSpace: Bool = true
 
     @Environment(\.modeTheme) var modeTheme
 
@@ -40,7 +43,7 @@ struct RunningAppCell: View {
                         .clipShape(RoundedRectangle(cornerRadius: 30))
                 }
             }
-            .padding(12)
+            .padding(reservesSelectionSpace ? 12 : 0)
             .overlay(
                 RoundedRectangle(cornerRadius: 22)
                     .strokeBorder(isSelected ? accentColor : .clear, lineWidth: 3)

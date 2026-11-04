@@ -7,8 +7,10 @@ struct CircleAppLayout: View {
     var selection: String?
 
     @Environment(\.modeTheme) var modeTheme
+    @AppStorage("keyboardNavigationEnabled") private var keyboardNavigationEnabled = true
 
     private let appCircleSize: CGFloat = 110
+    private let ringEdgeSoftness: CGFloat = 1.5 // glass rim feather, in points
     private let ringGap: CGFloat = 20 // clearance BETWEEN ring edges, not center-to-center
     private let ringIncrement: Int = 5 // ring N's capacity = ringIncrement * N
 
@@ -80,19 +82,15 @@ struct CircleAppLayout: View {
         let spacing = totalAngle / Double(segments)
 
         ZStack {
-            ForEach(Array(ringApps.enumerated()), id: \.element.id) { index, _ in
-                let t = Double(index) / Double(segments)
-                let angle = startAngle + t * totalAngle
-                let halfSpan = spacing / 2
-
-                ArcSegment(
-                    innerRadius: r - appCircleSize / 2,
-                    outerRadius: r + appCircleSize / 2,
-                    startAngle: Angle(radians: angle - halfSpan),
-                    endAngle: Angle(radians: angle + halfSpan)
-                )
-                .fill(.ultraThinMaterial)
-            }
+            // One arc per ring filled once, so the material samples the
+            // backdrop as a single surface instead of tinting per slot.
+            let lastAngle = startAngle + Double(max(count - 1, 0)) / Double(segments) * totalAngle
+            Color.clear.glassSurface(in: ArcSegment(
+                innerRadius: r - appCircleSize / 2,
+                outerRadius: r + appCircleSize / 2,
+                startAngle: Angle(radians: startAngle - spacing / 2),
+                endAngle: Angle(radians: lastAngle + spacing / 2)
+            ), edgeSoftness: ringEdgeSoftness)
 
             ForEach(Array(ringApps.enumerated()), id: \.element.id) { index, app in
                 let t = Double(index) / Double(segments)
@@ -104,7 +102,8 @@ struct CircleAppLayout: View {
                     app: app,
                     depth: typed.count,
                     onTap: onTap,
-                    isSelected: isSelected(app)
+                    isSelected: isSelected(app),
+                    reservesSelectionSpace: keyboardNavigationEnabled
                 )
                 .offset(x: x, y: y)
             }
