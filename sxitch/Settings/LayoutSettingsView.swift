@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -9,6 +10,10 @@ struct LayoutSettingsView: View, SettingsTab {
 
     @AppStorage("layoutStyle") var layoutStyle: String = "grid"
     @AppStorage("windowPosition") var windowPosition: String = Position.default.rawValue
+    @AppStorage(WindowPreviewSettings.enabledKey) private var previewsEnabled = false
+
+    private var appState = userState.shared
+    @State private var screenRecordingGranted: Bool = CGPreflightScreenCaptureAccess()
 
     @State private var wallpaperURL: URL?
     @State private var sampleApps: [PreviewSwitchableApp] = []
@@ -91,11 +96,50 @@ struct LayoutSettingsView: View, SettingsTab {
                     }
                 }
             }
+
+            windowPreviewsSection
         }
         .formStyle(.grouped)
         .onAppear {
+            screenRecordingGranted = CGPreflightScreenCaptureAccess()
             loadWallpaper()
             loadSampleApps()
+        }
+    }
+
+    private var canEnablePreviews: Bool {
+        appState.isPro && screenRecordingGranted
+    }
+
+    private var windowPreviewsSection: some View {
+        Section {
+            HStack {
+                Toggle("Window Previews", isOn: $previewsEnabled)
+                    .disabled(!canEnablePreviews)
+                SettingInfoTip(
+                    text: "Replace app icons with a snapshot of each app's frontmost window, and show window snapshots in the window picker. Applies to the Grid layout only."
+                )
+                if !appState.isPro {
+                    Spacer()
+                    Label("Pro", systemImage: "lock.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if !appState.isPro {
+                Text("Upgrade to Pro to see window previews in the switcher.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if !screenRecordingGranted {
+                Text("Grant Screen Recording in Settings → App to enable window previews.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            InfoTipHeader(
+                title: "Window Previews",
+                tip: "Snapshots are taken each time the switcher opens. Minimized, hidden or other-Space windows show the app icon."
+            )
         }
     }
 

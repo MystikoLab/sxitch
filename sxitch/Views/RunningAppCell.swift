@@ -8,18 +8,33 @@ struct RunningAppCell: View {
     /// Pads the icon so the selection outline has room. Layouts can turn this
     /// off when keyboard navigation is disabled and nothing is ever selected.
     var reservesSelectionSpace: Bool = true
+    /// Width of the window thumbnail replacing the icon; nil shows the icon.
+    var previewWidth: CGFloat? = nil
 
     @Environment(\.modeTheme) var modeTheme
+    @ObservedObject private var previewStore = WindowPreviewStore.shared
 
     private var accentColor: Color {
         resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system")
             ?? .accentColor
     }
 
+    /// Only running apps have windows to preview; pinned launchers and
+    /// commands keep their icon.
+    private var thumbnailWidth: CGFloat? {
+        app.runningApplication == nil ? nil : previewWidth
+    }
+
     var body: some View {
         VStack {
             ZStack(alignment: .topTrailing) {
-                if let symbol = app.symbolName {
+                if let thumbnailWidth, let pid = app.runningApplication?.processIdentifier {
+                    WindowThumbnail(
+                        image: previewStore.image(forApp: pid),
+                        fallbackIcon: app.icon,
+                        width: thumbnailWidth
+                    )
+                } else if let symbol = app.symbolName {
                     Image(systemName: symbol)
                         .resizable()
                         .scaledToFit()
@@ -57,7 +72,7 @@ struct RunningAppCell: View {
                 .truncationMode(.tail)
                 .foregroundStyle(modeTheme.foregroundStyle)
         }
-        .frame(maxWidth: 80)
+        .frame(maxWidth: thumbnailWidth.map { max(80, $0 + (reservesSelectionSpace ? 24 : 0)) } ?? 80)
         .padding(12)
         .appContextMenu(for: app)
         .onTapGesture {

@@ -173,6 +173,7 @@ struct ContentView: View {
             ) { _ in
                 reloadEntries()
                 resetSelection()
+                refreshAppPreviews()
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .openSettingsRequested)
@@ -221,6 +222,7 @@ struct ContentView: View {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                         reloadEntries()
                     }
+                    refreshAppPreviews()
                 }
                 resetSelection()
             }
@@ -228,8 +230,12 @@ struct ContentView: View {
                 if let app = newApp {
                     drillDownWindows = fetchWindowsForApp(app)
                     appState.typed = ""
+                    if WindowPreviewSettings.layoutSupportsPreviews(layoutStyle) {
+                        WindowPreviewStore.shared.refreshWindows(drillDownWindows.compactMap(\.windowID))
+                    }
                 } else {
                     drillDownWindows = []
+                    refreshAppPreviews()
                 }
                 resetSelection()
             }
@@ -243,6 +249,16 @@ struct ContentView: View {
 
     func reloadEntries() {
         openApps = appDelegate.currentEntries()
+    }
+
+    /// Snapshots each running app's frontmost window for the thumbnails.
+    /// List layouts never show previews, so skip the capture there.
+    private func refreshAppPreviews() {
+        guard WindowPreviewSettings.layoutSupportsPreviews(layoutStyle) else {
+            return WindowPreviewStore.shared.clear()
+        }
+        let pids = displayedEntries.compactMap { $0.runningApplication?.processIdentifier }
+        WindowPreviewStore.shared.refreshApps(pids)
     }
 
     private func blacklistApp(_ app: any SwitchableApp) {

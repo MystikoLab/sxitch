@@ -218,6 +218,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "hotkey_keycode": 256,
             "keyboardNavigationEnabled": true,
+            "windowPickerEnabled": true,
             "switcherAnimationStyle": SwitcherAnimation.fade.rawValue,
             "animationSpeedMultiplier": 1.0,
             "openCloseAnimationsEnabled": true,
@@ -231,6 +232,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "switchAlertsEnabled": true,
             "switchAlertPosition": "screenBottom",
             "switchAlertPadding": 12.0,
+            WindowPreviewSettings.enabledKey: false,
         ])
         if #available(macOS 26.0, *) {
             UserDefaults.standard.register(defaults: [
@@ -1068,6 +1070,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
 
         setupTapCacheRefresh()
+        WindowPreviewStore.shared.startBackgroundCaching()
         setupEventTap()
         setupAutoSelect()
         setupWindowMoveTracking()

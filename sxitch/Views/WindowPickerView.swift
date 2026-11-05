@@ -11,6 +11,27 @@ struct WindowPickerView: View {
     @Environment(\.modeTheme) var modeTheme
 
     @AppStorage("layoutStyle") private var layoutStyle: String = "grid"
+    @AppStorage(WindowPreviewSettings.enabledKey) private var previewsEnabled = false
+    @ObservedObject private var previewStore = WindowPreviewStore.shared
+
+    /// Thumbnail width for grid cells; nil keeps the app icon.
+    private var thumbnailWidth: CGFloat? {
+        previewsEnabled && WindowPreviewSettings.isActive
+            && WindowPreviewSettings.layoutSupportsPreviews(layoutStyle)
+            ? WindowPreviewSettings.width : nil
+    }
+
+    /// Grid cells pad their content by 8 on each side.
+    private var gridCellMinimum: CGFloat {
+        thumbnailWidth.map { $0 + 16 } ?? 80
+    }
+
+    /// Wide enough for two thumbnail columns, never narrower than the
+    /// icon-only picker.
+    private var panelWidth: CGFloat {
+        guard thumbnailWidth != nil else { return 300 }
+        return max(300, gridCellMinimum * 2 + 12 + 24)
+    }
 
     var body: some View {
         if layoutStyle == "circle" {
@@ -66,7 +87,10 @@ struct WindowPickerView: View {
                 ScrollViewReader { _ in
                     ScrollView {
                         LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: 80, maximum: 100))],
+                            columns: [GridItem(.adaptive(
+                                minimum: gridCellMinimum,
+                                maximum: thumbnailWidth == nil ? 100 : gridCellMinimum
+                            ))],
                             spacing: 12
                         ) {
                             ForEach(windows) { window in
@@ -79,16 +103,24 @@ struct WindowPickerView: View {
                 }
             }
         }
-        .frame(width: 300)
-        .frame(maxHeight: 400)
+        .frame(width: panelWidth)
+        .frame(maxHeight: thumbnailWidth == nil ? 400 : 560)
     }
 
     private func windowGridCell(_ window: WindowInfo) -> some View {
         VStack(spacing: 6) {
             ZStack(alignment: .topTrailing) {
-                Image(nsImage: appIcon)
-                    .resizable()
-                    .frame(width: 48, height: 48)
+                if let thumbnailWidth {
+                    WindowThumbnail(
+                        image: previewStore.image(forWindow: window.windowID),
+                        fallbackIcon: appIcon,
+                        width: thumbnailWidth
+                    )
+                } else {
+                    Image(nsImage: appIcon)
+                        .resizable()
+                        .frame(width: 48, height: 48)
+                }
 
                 if !typed.isEmpty,
                    let nextChar = window.title.dropFirst(typed.count).first(where: {

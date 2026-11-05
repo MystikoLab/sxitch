@@ -7,9 +7,28 @@ struct GridAppLayout: View {
     var selection: String?
 
     @Environment(\.modeTheme) var modeTheme
+    @AppStorage(WindowPreviewSettings.enabledKey) private var previewsEnabled = false
+
+    private var activePreviewWidth: CGFloat? {
+        previewsEnabled && WindowPreviewSettings.isActive
+            ? WindowPreviewSettings.width : nil
+    }
 
     private var chunkedApps: [[any SwitchableApp]] {
-        apps.chunkedEvenly(maxPerRow: 10)
+        apps.chunkedEvenly(maxPerRow: maxPerRow)
+    }
+
+    /// Thumbnail cells are much wider than icons, so with previews on a row
+    /// holds as many as fit across the screen the switcher opens on.
+    private var maxPerRow: Int {
+        guard let activePreviewWidth else { return 10 }
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
+        let available = (screen?.visibleFrame.width ?? 1440) * WindowPreviewSettings.maxRowWidthFraction
+        // Thumbnail + selection reserve (12 each side) + cell padding (12
+        // each side) + HStack spacing.
+        let cellWidth = activePreviewWidth + 24 + 24 + 8
+        return min(10, max(1, Int(available / cellWidth)))
     }
 
     var body: some View {
@@ -21,7 +40,8 @@ struct GridAppLayout: View {
                             app: app,
                             depth: typed.count,
                             onTap: onTap,
-                            isSelected: isSelected(app)
+                            isSelected: isSelected(app),
+                            previewWidth: activePreviewWidth
                         )
                     }
                 }
