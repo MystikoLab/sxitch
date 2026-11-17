@@ -279,6 +279,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// instead of the previous summon's size re-centering on screen.
     func presentSwitcher(makeKey: Bool = false) {
         pendingPresentation?.cancel()
+        // A mode resize still waiting to run would race the summon's sizing.
+        pendingModeResize?.cancel()
+        pendingModeResize = nil
+        isModeResizeAnimating = false
         isOpenAnimating = false
         pendingOpenFrame = nil
         window.alphaValue = 0
@@ -632,7 +636,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         self.appState.typed = ""
                         self.appState.depth = 0
                     }
-                    self.resizeWindowToFit(force: true)
+                    self.animateResizeForModeChange()
                 }
             } else {
                 // Hidden: swap content before the summon so its first visible frame is
@@ -920,10 +924,101 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    /// Off-screen stand-in that asks AppKit where `center()` would put a panel
+    /// of a given size, without moving the real one mid-animation.
+    private lazy var centerProbe = NSWindow(
+        contentRect: .zero,
+        styleMask: [.borderless],
+        backing: .buffered,
+        defer: true
+    )
+
+    /// Where the panel belongs at `size` under the current Window Position,
+    /// re-anchored from where it sits now.
+    private func anchoredOrigin(for size: NSSize) -> NSPoint {
+        let current = window.frame
+        switch windowPosition {
+        case .default:
+            centerProbe.setFrame(NSRect(origin: current.origin, size: size), display: false)
+            centerProbe.center()
+            return centerProbe.frame.origin
+        case .mousePos:
+            // Keep the centre it was summoned around rather than the
+            // bottom-left corner, clamped so growth can't push it off-screen.
+            let visible = (window.screen ?? screenWithMouse()).visibleFrame
+            return NSPoint(
+                x: min(max(current.midX - size.width / 2, visible.minX), visible.maxX - size.width),
+                y: min(max(current.midY - size.height / 2, visible.minY), visible.maxY - size.height)
+            )
+        case .custom:
+            // Center-anchored percentages: the dragged spot survives the
+            // panel growing or shrinking with its content.
+            return customOrigin(for: size)
+        default:
+            return windowPosition.point(for: size, on: window.screen ?? screenWithMouse())
+        }
+    }
+
+    /// True while a mode switch animates the panel to its new frame; the
+    /// layout-driven resize path stands down so it can't snap it mid-flight.
+    private var isModeResizeAnimating = false
+    /// The mode-switch resize waiting for SwiftUI to commit the new content.
+    private var pendingModeResize: DispatchWorkItem?
+
+    private static let modeResizeDuration = 0.25
+
+    /// Resizes the open panel after its content swapped to or from a custom
+    /// mode, animating it to the frame its Window Position dictates for the
+    /// new size. Measuring right after the state change would still read the
+    /// old content, so this waits for SwiftUI to commit first.
+    func animateResizeForModeChange() {
+        guard window.isVisible else { return }
+        pendingModeResize?.cancel()
+        // Raised now so the layout hook can't snap to the new size before
+        // the animation starts.
+        isModeResizeAnimating = true
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            pendingModeResize = nil
+            guard window.isVisible, !isOpenAnimating, !isClosingAnimated,
+                  let hostingView = window.contentView
+            else {
+                isModeResizeAnimating = false
+                return
+            }
+            hostingView.layoutSubtreeIfNeeded()
+            let newSize = hostingView.fittingSize
+            guard newSize.width > 0, newSize.height > 0 else {
+                isModeResizeAnimating = false
+                return
+            }
+            let target = NSRect(origin: anchoredOrigin(for: newSize), size: newSize)
+            guard target != window.frame,
+                  !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            else {
+                window.setFrame(target, display: false)
+                isModeResizeAnimating = false
+                return
+            }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = Self.modeResizeDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                self.window.animator().setFrame(target, display: true)
+            } completionHandler: {
+                self.isModeResizeAnimating = false
+                // The content may have changed again while in flight.
+                self.resizeWindowToFit()
+            }
+        }
+        pendingModeResize = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.layoutCommitDelay, execute: work)
+    }
+
     func resizeWindowToFit(force: Bool = false) {
         guard force || window.isVisible else { return }
         // Repositioning mid-entrance would snap the animated frame.
-        guard !isOpenAnimating else { return }
+        guard !isOpenAnimating, !isModeResizeAnimating else { return }
         guard let hostingView = window.contentView else { return }
         hostingView.layoutSubtreeIfNeeded()
         let newSize = hostingView.fittingSize
@@ -942,16 +1037,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // the resize; center()'s placement math is left to AppKit.
             window.center()
         } else {
-            var targetOrigin = window.frame.origin
-            if windowPosition == .custom {
-                // Center-anchored percentages: the dragged spot survives the
-                // panel growing or shrinking with its content.
-                targetOrigin = customOrigin(for: newSize)
-            } else if windowPosition != .mousePos {
-                let screen = window.screen ?? screenWithMouse()
-                targetOrigin = windowPosition.point(for: newSize, on: screen)
-            }
-            window.setFrame(NSRect(origin: targetOrigin, size: newSize), display: false)
+            window.setFrame(
+                NSRect(origin: anchoredOrigin(for: newSize), size: newSize),
+                display: false
+            )
         }
     }
 
@@ -1138,7 +1227,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleWindowMoveTrackingGates() -> Bool {
         guard !suppressMoveSaving else { return false }
         guard window.isVisible else { return false }
-        guard !isOpenAnimating, !isClosingAnimated else { return false }
+        guard !isOpenAnimating, !isClosingAnimated, !isModeResizeAnimating else { return false }
         return true
     }
 
@@ -1443,7 +1532,7 @@ extension AppDelegate {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
                         self.appState.activeModeID = nil
                     }
-                    self.resizeWindowToFit(force: true)
+                    self.animateResizeForModeChange()
                 } else {
                     self.closeWindow()
                 }

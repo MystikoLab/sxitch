@@ -203,7 +203,7 @@ struct ContentView: View {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
                         appState.activeModeID = nil
                     }
-                    appDelegate.resizeWindowToFit(force: true)
+                    appDelegate.animateResizeForModeChange()
                 } else {
                     appDelegate.closeWindow()
                 }
