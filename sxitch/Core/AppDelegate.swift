@@ -978,7 +978,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let contentView = SwitcherHostingView(
             rootView: ContentView(appState: appState, appDelegate: self)
         )
-        contentView.translatesAutoresizingMaskIntoConstraints = false
+        // resizeWindowToFit() is the panel's only sizer. Left to its default
+        // sizing options the hosting view also drives the window through
+        // constraints, which can disagree with fittingSize by a point; the
+        // two then fight every frame and anything anchored to the content
+        // (an open context menu) creeps.
+        contentView.sizingOptions = []
         contentView.resizeHandler = { [weak self] in
             self?.resizeWindowToFit()
         }

@@ -36,6 +36,13 @@ enum SettingsSearchIndex {
         SettingsSearchEntry(tabID: "layout", title: "Layout", keywords: ["grid", "list", "circle", "scrollable", "scroll list"]),
         SettingsSearchEntry(tabID: "layout", title: "Window Position", keywords: ["screen", "placement", "corner"]),
 
+        // Theming › Icons
+        SettingsSearchEntry(tabID: "icons", title: "Icon size", keywords: ["scale", "bigger", "smaller", "zoom"]),
+        SettingsSearchEntry(tabID: "icons", title: "Show key badge", keywords: ["letter", "hint", "shortcut"]),
+        SettingsSearchEntry(tabID: "icons", title: "Show app name", keywords: ["label", "title", "font size", "name size"]),
+        SettingsSearchEntry(tabID: "icons", title: "Dim unselected icons", keywords: ["opacity", "fade", "highlight"]),
+        SettingsSearchEntry(tabID: "icons", title: "Spacing", keywords: ["gap", "padding", "density"]),
+
         // Theming › Animation
         SettingsSearchEntry(tabID: "animation", title: "Enable animations", keywords: ["disable", "off"]),
         SettingsSearchEntry(tabID: "animation", title: "Open / Close Animation", keywords: ["fade", "slide", "drop", "scale", "preview"]),

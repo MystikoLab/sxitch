@@ -211,9 +211,8 @@ struct PreviewSwitchableApp: SwitchableApp {
         0
     }
 
-    var runningApplication: NSRunningApplication? {
-        nil
-    }
+    /// Set when the preview should show this app's window capture.
+    var runningApplication: NSRunningApplication? = nil
 
     var overrideTap: ((any SwitchableApp) -> Void)? {
         nil

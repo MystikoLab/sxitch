@@ -14,6 +14,7 @@ struct ContentView: View {
     @AppStorage("pinned_app_urls") var pinnedAppURLs: [String] = []
     @AppStorage("layoutStyle") var layoutStyle: String = "grid"
     @AppStorage("showPickerUi") private var showUi = true
+    private var iconSettings = IconStyleSettings()
 
     @ObservedObject var appState: AppState
     @State private var drillDownWindows: [WindowInfo] = []
@@ -127,6 +128,9 @@ struct ContentView: View {
                 }
                 .environment(\.appContextActions, appContextActions)
                 .environment(\.modeTheme, ModeTheme.theme(for: appState.mode))
+                // Icon customisation covers the regular switcher (incl. Hide
+                // and Quit); custom modes keep the default look.
+                .environment(\.iconStyle, appState.activeModeID == nil ? iconSettings.style : .default)
                 .id("\(appState.mode.rawValue)-\(appState.activeModeID ?? "default")")
             }
         }

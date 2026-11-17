@@ -21,7 +21,8 @@ struct ListAppLayout: View {
                             app: app,
                             depth: typed.count,
                             onTap: onTap,
-                            isSelected: isSelected(app)
+                            isSelected: isSelected(app),
+                            hasSelection: selection != nil
                         )
                     }
                 }

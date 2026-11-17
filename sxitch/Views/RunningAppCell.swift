@@ -10,8 +10,12 @@ struct RunningAppCell: View {
     var reservesSelectionSpace: Bool = true
     /// Width of the window thumbnail replacing the icon; nil shows the icon.
     var previewWidth: CGFloat? = nil
+    /// Whether anything in the switcher is selected, so unselected cells
+    /// only dim while there's a selection to contrast with.
+    var hasSelection: Bool = false
 
     @Environment(\.modeTheme) var modeTheme
+    @Environment(\.iconStyle) private var iconStyle
     @ObservedObject private var previewStore = WindowPreviewStore.shared
 
     private var accentColor: Color {
@@ -23,6 +27,10 @@ struct RunningAppCell: View {
     /// commands keep their icon.
     private var thumbnailWidth: CGFloat? {
         app.runningApplication == nil ? nil : previewWidth
+    }
+
+    private var iconSize: CGFloat {
+        60 * iconStyle.scale
     }
 
     var body: some View {
@@ -38,17 +46,19 @@ struct RunningAppCell: View {
                     Image(systemName: symbol)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 60, height: 60)
+                        .frame(width: iconSize, height: iconSize)
                         .foregroundStyle(modeTheme.foregroundStyle)
                 } else {
                     Image(nsImage: app.icon)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 60, height: 60)
+                        .frame(width: iconSize, height: iconSize)
                         .clipped()
                 }
 
-                if let nextChar = app.appName.dropFirst(depth).first(where: { !$0.isWhitespace }) {
+                if iconStyle.showBadge,
+                   let nextChar = app.appName.dropFirst(depth).first(where: { !$0.isWhitespace })
+                {
                     Text(String(nextChar).uppercased())
                         .foregroundStyle(modeTheme.foregroundStyle)
                         .font(.callout)
@@ -65,14 +75,18 @@ struct RunningAppCell: View {
             )
             .animation(.easeOut(duration: 0.12), value: isSelected)
 
-            Text(app.appName)
-                .opacity(isSelected ? 1 : 0.7)
-                .fontWeight(isSelected ? .semibold : .regular)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .foregroundStyle(modeTheme.foregroundStyle)
+            if iconStyle.showName {
+                Text(app.appName)
+                    .font(iconStyle.nameFont.font)
+                    .opacity(isSelected ? 1 : 0.7)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(modeTheme.foregroundStyle)
+            }
         }
-        .frame(maxWidth: thumbnailWidth.map { max(80, $0 + (reservesSelectionSpace ? 24 : 0)) } ?? 80)
+        .frame(maxWidth: thumbnailWidth.map { max(80, $0 + (reservesSelectionSpace ? 24 : 0)) } ?? max(64, 80 * iconStyle.scale))
+        .opacity(iconStyle.opacity(isSelected: isSelected, hasSelection: hasSelection))
         .padding(12)
         .appContextMenu(for: app)
         .onTapGesture {

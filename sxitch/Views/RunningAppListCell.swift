@@ -5,8 +5,16 @@ struct RunningAppListCell: View {
     let depth: Int
     let onTap: (any SwitchableApp) -> Void
     var isSelected: Bool = false
+    /// Whether anything in the switcher is selected, so unselected rows
+    /// only dim while there's a selection to contrast with.
+    var hasSelection: Bool = false
 
     @Environment(\.modeTheme) var modeTheme
+    @Environment(\.iconStyle) private var iconStyle
+
+    private var iconSize: CGFloat {
+        36 * iconStyle.scale
+    }
 
     private var accentColor: Color {
         resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system")
@@ -20,17 +28,19 @@ struct RunningAppListCell: View {
                     Image(systemName: symbol)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 36, height: 36)
+                        .frame(width: iconSize, height: iconSize)
                         .foregroundStyle(modeTheme.foregroundStyle)
                 } else {
                     Image(nsImage: app.icon)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 36, height: 36)
+                        .frame(width: iconSize, height: iconSize)
                         .clipped()
                 }
 
-                if let nextChar = app.appName.dropFirst(depth).first(where: { !$0.isWhitespace }) {
+                if iconStyle.showBadge,
+                   let nextChar = app.appName.dropFirst(depth).first(where: { !$0.isWhitespace })
+                {
                     Text(String(nextChar).uppercased())
                         .foregroundStyle(modeTheme.foregroundStyle)
                         .font(.caption2)
@@ -41,7 +51,9 @@ struct RunningAppListCell: View {
                 }
             }
 
+            // List rows always keep their name; it's the row's whole label.
             Text(app.appName)
+                .font(iconStyle.nameFont.font)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .opacity(isSelected ? 1 : 0.7)
@@ -51,11 +63,12 @@ struct RunningAppListCell: View {
             Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.vertical, iconStyle.spacing)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(accentColor.opacity(isSelected ? 0.9 : 0), lineWidth: 2)
         )
+        .opacity(iconStyle.opacity(isSelected: isSelected, hasSelection: hasSelection))
         .animation(.easeOut(duration: 0.12), value: isSelected)
         .contentShape(Rectangle())
         .appContextMenu(for: app)

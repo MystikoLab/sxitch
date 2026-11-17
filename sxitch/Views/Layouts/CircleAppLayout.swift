@@ -7,9 +7,15 @@ struct CircleAppLayout: View {
     var selection: String?
 
     @Environment(\.modeTheme) var modeTheme
+    @Environment(\.iconStyle) private var iconStyle
     @AppStorage("keyboardNavigationEnabled") private var keyboardNavigationEnabled = true
 
-    private let appCircleSize: CGFloat = 110
+    /// Slot size tracks the icon: a 60pt icon plus room for the badge,
+    /// selection outline and name.
+    private var appCircleSize: CGFloat {
+        60 * iconStyle.scale + 50
+    }
+
     private let ringEdgeSoftness: CGFloat = 1.5 // glass rim feather, in points
     private let ringGap: CGFloat = 20 // clearance BETWEEN ring edges, not center-to-center
     private let ringIncrement: Int = 5 // ring N's capacity = ringIncrement * N
@@ -103,7 +109,8 @@ struct CircleAppLayout: View {
                     depth: typed.count,
                     onTap: onTap,
                     isSelected: isSelected(app),
-                    reservesSelectionSpace: keyboardNavigationEnabled
+                    reservesSelectionSpace: keyboardNavigationEnabled,
+                    hasSelection: selection != nil
                 )
                 .offset(x: x, y: y)
             }

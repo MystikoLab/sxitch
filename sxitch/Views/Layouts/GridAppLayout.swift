@@ -7,6 +7,7 @@ struct GridAppLayout: View {
     var selection: String?
 
     @Environment(\.modeTheme) var modeTheme
+    @Environment(\.iconStyle) private var iconStyle
     @AppStorage(WindowPreviewSettings.enabledKey) private var previewsEnabled = false
 
     private var activePreviewWidth: CGFloat? {
@@ -27,21 +28,22 @@ struct GridAppLayout: View {
         let available = (screen?.visibleFrame.width ?? 1440) * WindowPreviewSettings.maxRowWidthFraction
         // Thumbnail + selection reserve (12 each side) + cell padding (12
         // each side) + HStack spacing.
-        let cellWidth = activePreviewWidth + 24 + 24 + 8
+        let cellWidth = activePreviewWidth + 24 + 24 + iconStyle.spacing
         return min(10, max(1, Int(available / cellWidth)))
     }
 
     var body: some View {
-        VStack {
+        VStack(spacing: iconStyle.spacing) {
             ForEach(chunkedApps.indices, id: \.self) { rowIndex in
-                HStack {
+                HStack(spacing: iconStyle.spacing) {
                     ForEach(chunkedApps[rowIndex], id: \.id) { app in
                         RunningAppCell(
                             app: app,
                             depth: typed.count,
                             onTap: onTap,
                             isSelected: isSelected(app),
-                            previewWidth: activePreviewWidth
+                            previewWidth: activePreviewWidth,
+                            hasSelection: selection != nil
                         )
                     }
                 }

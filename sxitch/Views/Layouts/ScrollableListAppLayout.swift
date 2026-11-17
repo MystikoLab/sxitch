@@ -16,7 +16,8 @@ struct ScrollableListAppLayout: View {
                             app: app,
                             depth: typed.count,
                             onTap: onTap,
-                            isSelected: isSelected(app)
+                            isSelected: isSelected(app),
+                            hasSelection: selection != nil
                         )
                         .id(app.id)
                     }
