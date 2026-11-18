@@ -22,6 +22,9 @@ struct RunningAppListCell: View {
         36 * iconStyle.scale
     }
 
+    /// Rows hug their name up to this width, then truncate it.
+    static let maxRowWidth: CGFloat = 320
+
     private var accentColor: Color {
         resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system")
             ?? .accentColor
@@ -45,7 +48,7 @@ struct RunningAppListCell: View {
                 }
 
                 if iconStyle.showBadge,
-                   let nextChar = app.appName.dropFirst(depth).first(where: { !$0.isWhitespace })
+                   let nextChar = app.appName.nextTypedCharacter(afterTyped: depth)
                 {
                     Text(String(nextChar).uppercased())
                         .foregroundStyle(modeTheme.foregroundStyle)
@@ -65,11 +68,12 @@ struct RunningAppListCell: View {
                 .opacity(isSelected || isQueued ? 1 : 0.7)
                 .fontWeight(isSelected || isQueued ? .semibold : .regular)
                 .foregroundStyle(modeTheme.foregroundStyle)
-
-            Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, iconStyle.spacing)
+        // Fills its column (as wide as the widest row) so outlines line up,
+        // without ever growing past the cap.
+        .frame(maxWidth: Self.maxRowWidth, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(accentColor.opacity(isQueued ? 0.3 : 0))

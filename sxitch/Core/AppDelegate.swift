@@ -236,6 +236,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "switchAlertPosition": "screenBottom",
             "switchAlertPadding": 12.0,
             WindowPreviewSettings.enabledKey: false,
+            WindowPreviewSettings.sizeKey: WindowPreviewSize.medium.rawValue,
             MultiOpenSettings.enabledKey: true,
             MultiOpenSettings.modifierKey: MultiOpenModifier.shift.rawValue,
             MultiOpenSettings.orderKey: MultiOpenOrder.lastOnTop.rawValue,
@@ -253,6 +254,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Final placement snapshotted by `prepareOpenAnimation` for animated
     /// styles that temporarily offset the window (slide).
     private var pendingOpenFrame: NSRect?
+    /// The panel's frame as of its last placement, so a resize can be
+    /// re-anchored around where it was rather than where AppKit left it.
+    private var lastAnchoredFrame: NSRect?
     /// Debounces the burst of `didMove` notifications while a drag is in
     /// flight; only the settled frame is saved as the custom position.
     private var customPositionSaveWork: DispatchWorkItem?
@@ -303,6 +307,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             pendingPresentation = nil
             resizeWindowToFit(force: true)
             positionWindow()
+            lastAnchoredFrame = window.frame
             prepareOpenAnimation()
             playOpenAnimation()
         }
@@ -727,13 +732,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// while drilling down. Read from the tap caches so a keypress never
     /// enumerates apps or windows.
     private func keyboardSelectableNames() -> [String] {
-        let typedLower = appState.typed.lowercased()
+        let typed = appState.typed
         if appState.drillDownApp != nil {
             return tapDrillWindows()
-                .filter { $0.title.lowercased().hasPrefix(typedLower) }
+                .filter { $0.title.matchesTyped(typed) }
                 .map(\.title)
         }
-        return tapAppNames().filter { $0.hasPrefix(typedLower) }
+        return tapAppNames().filter { $0.matchesTyped(typed) }
     }
 
     func moveKeyboardSelection(_ delta: Int) {
@@ -754,9 +759,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             guard let selected = self.appState.selectedName else { return }
             if self.appState.drillDownApp != nil {
-                let typedLower = self.appState.typed.lowercased()
+                let typed = self.appState.typed
                 let visible = self.tapDrillWindows().filter {
-                    $0.title.lowercased().hasPrefix(typedLower)
+                    $0.title.matchesTyped(typed)
                 }
                 guard let matching = visible.first(where: { $0.title == selected }) else { return }
                 let theme = ModeTheme.theme(for: self.appState.mode)
@@ -1031,8 +1036,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Where the panel belongs at `size` under the current Window Position,
     /// re-anchored from where it sits now.
-    private func anchoredOrigin(for size: NSSize) -> NSPoint {
-        let current = window.frame
+    private func anchoredOrigin(for size: NSSize, from current: NSRect? = nil) -> NSPoint {
+        let current = current ?? window.frame
         switch windowPosition {
         case .default:
             centerProbe.setFrame(NSRect(origin: current.origin, size: size), display: false)
@@ -1115,6 +1120,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard force || window.isVisible else { return }
         // Repositioning mid-entrance would snap the animated frame.
         guard !isOpenAnimating, !isModeResizeAnimating else { return }
+        // Resizes that landed mid-animation were skipped by the resize
+        // observer; catch up now that the panel has settled.
+        handleWindowDidResize()
         guard let hostingView = window.contentView else { return }
         hostingView.layoutSubtreeIfNeeded()
         let newSize = hostingView.fittingSize
@@ -1290,6 +1298,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleWindowDidMove()
         }
 
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleWindowDidResize()
+        }
+
         NSEvent.addLocalMonitorForEvents(
             matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
         ) { [weak self] event in
@@ -1328,6 +1344,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleWindowDidMove() {
+        // A pure move (drag, placement) becomes the new anchor; a move that
+        // came with a resize is left for handleWindowDidResize to re-anchor.
+        if window.frame.size == lastAnchoredFrame?.size {
+            lastAnchoredFrame = window.frame
+        }
         guard handleWindowMoveTrackingGates() else { return }
 
         // didMove also fires for non-drag relayouts; a save is only scheduled
@@ -1397,6 +1418,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         dragWasActive = false
         isUserDraggingWindow = false
         pendingDragMouseDown = nil
+    }
+
+    /// The hosting view resizes the panel as its content changes (typing
+    /// narrows the list), and AppKit keeps the bottom-left origin when it
+    /// does. Re-anchor every settled resize so the panel stays where its
+    /// Window Position puts it instead of drifting off-center.
+    private func handleWindowDidResize() {
+        guard window.isVisible, !isOpenAnimating, !isClosingAnimated,
+              !isModeResizeAnimating, !isUserDraggingWindow
+        else { return }
+        let size = window.frame.size
+        let target = anchoredOrigin(for: size, from: lastAnchoredFrame)
+        if abs(target.x - window.frame.minX) > 0.5 || abs(target.y - window.frame.minY) > 0.5 {
+            setWindowOrigin(target)
+        }
+        lastAnchoredFrame = window.frame
     }
 
     /// Free users can drag but don't keep it: restore the placement the saved
@@ -1474,7 +1511,7 @@ extension AppDelegate {
                 if let drillApp = self.appState.drillDownApp {
                     let allWindows = fetchWindowsForApp(drillApp)
                     let matched = allWindows.filter {
-                        $0.title.lowercased().starts(with: typed.lowercased())
+                        $0.title.matchesTyped(typed)
                     }
                     if matched.count == 1 {
                         let theme = ModeTheme.theme(for: self.appState.mode)
@@ -1487,7 +1524,7 @@ extension AppDelegate {
                     }
                 } else {
                     let filteredApps = self.currentEntries().filter {
-                        $0.appName.lowercased().starts(with: typed.lowercased())
+                        $0.appName.matchesTyped(typed)
                     }
                     if filteredApps.count == 1 {
                         self.pickApp(
@@ -1805,14 +1842,18 @@ extension AppDelegate {
                 } else {
                     pickerChar = raw
                 }
+                // Separators are skipped when matching, so typing one would
+                // only desync the badge position; swallow it.
+                if pickerChar.allSatisfy(\.isTypedMatchSeparator) {
+                    return nil
+                }
                 let candidate = appState.typed + pickerChar
-                let candidateLower = candidate.lowercased()
 
                 if appState.drillDownApp != nil {
                     // Window-picking mode: match against window titles for this app
                     let allWindows = tapDrillWindows()
                     let matchingWindows = allWindows.filter {
-                        $0.title.lowercased().hasPrefix(candidateLower)
+                        $0.title.matchesTyped(candidate)
                     }
                     if matchingWindows.isEmpty {
                         return nil
@@ -1839,7 +1880,7 @@ extension AppDelegate {
 
                 // App-picking mode: match against app names (unchanged)
                 let matchingNames = tapAppNames().filter { app in
-                    app.hasPrefix(candidateLower)
+                    app.matchesTyped(candidate)
                 }
                 if matchingNames.isEmpty {
                     return nil

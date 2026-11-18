@@ -35,6 +35,7 @@ enum SettingsSearchIndex {
         // Theming › Layout
         SettingsSearchEntry(tabID: "layout", title: "Layout", keywords: ["grid", "list", "circle", "scrollable", "scroll list"]),
         SettingsSearchEntry(tabID: "layout", title: "Window Position", keywords: ["screen", "placement", "corner"]),
+        SettingsSearchEntry(tabID: "layout", title: "Preview Size", keywords: ["window previews", "thumbnail", "small", "medium", "large"]),
 
         // Theming › Icons
         SettingsSearchEntry(tabID: "icons", title: "Icon size", keywords: ["scale", "bigger", "smaller", "zoom"]),

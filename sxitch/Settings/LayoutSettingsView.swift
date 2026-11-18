@@ -11,6 +11,7 @@ struct LayoutSettingsView: View, SettingsTab {
     @AppStorage("layoutStyle") var layoutStyle: String = "grid"
     @AppStorage("windowPosition") var windowPosition: String = Position.default.rawValue
     @AppStorage(WindowPreviewSettings.enabledKey) private var previewsEnabled = false
+    @AppStorage(WindowPreviewSettings.sizeKey) private var previewSize = WindowPreviewSize.medium.rawValue
 
     private var appState = userState.shared
     @State private var screenRecordingGranted: Bool = CGPreflightScreenCaptureAccess()
@@ -126,6 +127,22 @@ struct LayoutSettingsView: View, SettingsTab {
                         .foregroundStyle(.secondary)
                 }
             }
+            HStack {
+                Text("Preview Size")
+                SettingInfoTip(
+                    text: "How large window snapshots are drawn in the grid and the window picker."
+                )
+                Spacer()
+                Picker("Preview Size", selection: $previewSize) {
+                    ForEach(WindowPreviewSize.allCases, id: \.rawValue) { size in
+                        Text(size.displayName).tag(size.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
+            .disabled(!canEnablePreviews || !previewsEnabled)
             if !appState.isPro {
                 Text("Upgrade to Pro to see window previews in the switcher.")
                     .font(.caption)

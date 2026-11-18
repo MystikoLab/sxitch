@@ -16,6 +16,7 @@ struct IconsSettingsView: View, SettingsTab {
     @AppStorage(IconStyle.spacingKey) private var spacing: Double = 8
     @AppStorage("layoutStyle") private var layoutStyle: String = "grid"
     @AppStorage(WindowPreviewSettings.enabledKey) private var previewsEnabled = false
+    @AppStorage(WindowPreviewSettings.sizeKey) private var previewSize = WindowPreviewSize.medium.rawValue
 
     private var iconSettings = IconStyleSettings()
     private var usState = userState.shared
@@ -127,6 +128,7 @@ struct IconsSettingsView: View, SettingsTab {
             refreshPreviews()
         }
         .onChange(of: previewsEnabled) { _, _ in refreshPreviews() }
+        .onChange(of: previewSize) { _, _ in refreshPreviews() }
         .onChange(of: layoutStyle) { _, _ in refreshPreviews() }
     }
 

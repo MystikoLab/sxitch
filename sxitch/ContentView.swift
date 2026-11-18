@@ -36,15 +36,15 @@ struct ContentView: View {
     /// Entries after the typed-prefix filter — the same list every layout
     /// renders, and the space keyboard selection moves through.
     var filteredEntries: [any SwitchableApp] {
-        let typedLower = appState.typed.lowercased()
-        guard !typedLower.isEmpty else { return displayedEntries }
-        return displayedEntries.filter { $0.appName.lowercased().starts(with: typedLower) }
+        let typed = appState.typed
+        guard !typed.isEmpty else { return displayedEntries }
+        return displayedEntries.filter { $0.appName.matchesTyped(typed) }
     }
 
     private var filteredDrillWindows: [WindowInfo] {
-        let typedLower = appState.typed.lowercased()
-        guard !typedLower.isEmpty else { return drillDownWindows }
-        return drillDownWindows.filter { $0.title.lowercased().starts(with: typedLower) }
+        let typed = appState.typed
+        guard !typed.isEmpty else { return drillDownWindows }
+        return drillDownWindows.filter { $0.title.matchesTyped(typed) }
     }
 
     private var keyboardNavigationEnabled: Bool {

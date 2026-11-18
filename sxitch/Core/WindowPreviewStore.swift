@@ -16,13 +16,46 @@ func cgWindowID(for element: AXUIElement) -> CGWindowID? {
     return id
 }
 
+enum WindowPreviewSize: String, CaseIterable {
+    case small
+    case medium
+    case large
+
+    var displayName: String {
+        switch self {
+        case .small: "Small"
+        case .medium: "Medium"
+        case .large: "Large"
+        }
+    }
+
+    var height: CGFloat {
+        switch self {
+        case .small: 80
+        case .medium: 120
+        case .large: 180
+        }
+    }
+}
+
 enum WindowPreviewSettings {
     static let enabledKey = "windowPreviewsEnabled"
+    static let sizeKey = "windowPreviewSize"
     /// Thumbnails are letterboxed into a fixed 16:10 box so cells keep a
     /// stable size whether or not a capture has landed yet.
     static let aspectRatio: CGFloat = 10.0 / 16.0
-    static let height: CGFloat = 120
-    static let width: CGFloat = height / aspectRatio
+
+    static var size: WindowPreviewSize {
+        UserDefaults.standard.string(forKey: sizeKey).flatMap(WindowPreviewSize.init) ?? .medium
+    }
+
+    static var height: CGFloat {
+        size.height
+    }
+
+    static var width: CGFloat {
+        height / aspectRatio
+    }
 
     /// Fraction of the screen width a row of thumbnails may span before the
     /// grid wraps.

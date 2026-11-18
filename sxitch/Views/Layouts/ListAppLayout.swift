@@ -26,6 +26,9 @@ struct ListAppLayout: View {
                         )
                     }
                 }
+                // Columns take their widest row's width instead of whatever
+                // width the panel was last laid out at.
+                .fixedSize(horizontal: true, vertical: false)
             }
         }
         .padding(6)

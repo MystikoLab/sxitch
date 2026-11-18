@@ -63,7 +63,7 @@ struct RunningAppCell: View {
                 }
 
                 if iconStyle.showBadge,
-                   let nextChar = app.appName.dropFirst(depth).first(where: { !$0.isWhitespace })
+                   let nextChar = app.appName.nextTypedCharacter(afterTyped: depth)
                 {
                     Text(String(nextChar).uppercased())
                         .foregroundStyle(modeTheme.foregroundStyle)

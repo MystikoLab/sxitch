@@ -9,6 +9,9 @@ struct GridAppLayout: View {
     @Environment(\.modeTheme) var modeTheme
     @Environment(\.iconStyle) private var iconStyle
     @AppStorage(WindowPreviewSettings.enabledKey) private var previewsEnabled = false
+    /// Read so the cells redraw when the size changes; the value itself
+    /// goes through `WindowPreviewSettings.width`.
+    @AppStorage(WindowPreviewSettings.sizeKey) private var previewSize = WindowPreviewSize.medium.rawValue
 
     private var activePreviewWidth: CGFloat? {
         previewsEnabled && WindowPreviewSettings.isActive

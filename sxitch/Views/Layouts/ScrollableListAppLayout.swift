@@ -22,6 +22,7 @@ struct ScrollableListAppLayout: View {
                         .id(app.id)
                     }
                 }
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(6)
             }
             .onChange(of: selection) { _, newValue in

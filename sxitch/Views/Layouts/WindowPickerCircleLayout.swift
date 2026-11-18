@@ -156,9 +156,7 @@ struct WindowPickerCircleLayout: View {
                     .frame(width: tileIconSize, height: tileIconSize)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                if let nextChar = window.title.dropFirst(typed.count).first(where: {
-                    !$0.isWhitespace
-                }) {
+                if let nextChar = window.title.nextTypedCharacter(afterTyped: typed.count) {
                     Text(String(nextChar).uppercased())
                         .font(.caption2)
                         .padding(3)

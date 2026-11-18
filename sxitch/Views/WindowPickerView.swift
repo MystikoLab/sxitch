@@ -12,6 +12,9 @@ struct WindowPickerView: View {
 
     @AppStorage("layoutStyle") private var layoutStyle: String = "grid"
     @AppStorage(WindowPreviewSettings.enabledKey) private var previewsEnabled = false
+    /// Read so the cells redraw when the size changes; the value itself
+    /// goes through `WindowPreviewSettings.width`.
+    @AppStorage(WindowPreviewSettings.sizeKey) private var previewSize = WindowPreviewSize.medium.rawValue
     @ObservedObject private var previewStore = WindowPreviewStore.shared
 
     /// Thumbnail width for grid cells; nil keeps the app icon.
@@ -123,9 +126,7 @@ struct WindowPickerView: View {
                 }
 
                 if !typed.isEmpty,
-                   let nextChar = window.title.dropFirst(typed.count).first(where: {
-                       !$0.isWhitespace
-                   })
+                   let nextChar = window.title.nextTypedCharacter(afterTyped: typed.count)
                 {
                     Text(String(nextChar).uppercased())
                         .font(.caption2)
@@ -169,9 +170,7 @@ struct WindowPickerView: View {
                     .frame(width: 36, height: 36)
 
                 if !typed.isEmpty,
-                   let nextChar = window.title.dropFirst(typed.count).first(where: {
-                       !$0.isWhitespace
-                   })
+                   let nextChar = window.title.nextTypedCharacter(afterTyped: typed.count)
                 {
                     Text(String(nextChar).uppercased())
                         .font(.caption2)
