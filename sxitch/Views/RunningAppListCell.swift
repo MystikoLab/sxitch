@@ -11,6 +11,12 @@ struct RunningAppListCell: View {
 
     @Environment(\.modeTheme) var modeTheme
     @Environment(\.iconStyle) private var iconStyle
+    @Environment(\.multiOpenQueue) private var multiOpenQueue
+    @Environment(\.multiOpenClick) private var multiOpenClick
+
+    private var isQueued: Bool {
+        multiOpenQueue.contains(app.appName.lowercased())
+    }
 
     private var iconSize: CGFloat {
         36 * iconStyle.scale
@@ -56,23 +62,31 @@ struct RunningAppListCell: View {
                 .font(iconStyle.nameFont.font)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .opacity(isSelected ? 1 : 0.7)
-                .fontWeight(isSelected ? .semibold : .regular)
+                .opacity(isSelected || isQueued ? 1 : 0.7)
+                .fontWeight(isSelected || isQueued ? .semibold : .regular)
                 .foregroundStyle(modeTheme.foregroundStyle)
 
             Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, iconStyle.spacing)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(accentColor.opacity(isQueued ? 0.3 : 0))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(accentColor.opacity(isSelected ? 0.9 : 0), lineWidth: 2)
         )
-        .opacity(iconStyle.opacity(isSelected: isSelected, hasSelection: hasSelection))
+        .opacity(iconStyle.opacity(isSelected: isSelected || isQueued, hasSelection: hasSelection))
         .animation(.easeOut(duration: 0.12), value: isSelected)
+        .animation(.easeOut(duration: 0.12), value: isQueued)
         .contentShape(Rectangle())
         .appContextMenu(for: app)
         .onTapGesture {
+            if multiOpenClick?(app) == true {
+                return
+            }
             if let override = app.overrideTap {
                 override(app)
             } else {

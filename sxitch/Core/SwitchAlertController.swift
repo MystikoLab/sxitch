@@ -31,11 +31,29 @@ final class SwitchAlertController {
 
     private init() {}
 
+    /// Names listed in a batch alert before the rest collapse into "and N more",
+    /// keeping the single-line capsule a sane width.
+    private let maxBatchNames = 3
+
     func show(_ verb: Verb, appName: String) {
         guard UserDefaults.standard.bool(forKey: "switchAlertsEnabled") else { return }
         DispatchQueue.main.async {
             self.display(verb: verb, appName: appName)
         }
+    }
+
+    /// One alert for a whole multi-open batch: "Opening A, B and C".
+    func show(_ verb: Verb, appNames: [String]) {
+        show(verb, appName: batchList(appNames))
+    }
+
+    private func batchList(_ names: [String]) -> String {
+        if names.count > maxBatchNames {
+            let shown = names.prefix(maxBatchNames).joined(separator: ", ")
+            return "\(shown) and \(names.count - maxBatchNames) more"
+        }
+        guard let last = names.last, names.count > 1 else { return names.first ?? "" }
+        return "\(names.dropLast().joined(separator: ", ")) and \(last)"
     }
 
     /// Immediate dismissal via the alert's X button.

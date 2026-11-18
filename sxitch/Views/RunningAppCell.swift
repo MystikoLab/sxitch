@@ -16,7 +16,13 @@ struct RunningAppCell: View {
 
     @Environment(\.modeTheme) var modeTheme
     @Environment(\.iconStyle) private var iconStyle
+    @Environment(\.multiOpenQueue) private var multiOpenQueue
+    @Environment(\.multiOpenClick) private var multiOpenClick
     @ObservedObject private var previewStore = WindowPreviewStore.shared
+
+    private var isQueued: Bool {
+        multiOpenQueue.contains(app.appName.lowercased())
+    }
 
     private var accentColor: Color {
         resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system")
@@ -69,27 +75,35 @@ struct RunningAppCell: View {
                 }
             }
             .padding(reservesSelectionSpace ? 12 : 0)
+            .background(
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(accentColor.opacity(isQueued ? 0.3 : 0))
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 22)
                     .strokeBorder(isSelected ? accentColor : .clear, lineWidth: 3)
             )
             .animation(.easeOut(duration: 0.12), value: isSelected)
+            .animation(.easeOut(duration: 0.12), value: isQueued)
 
             if iconStyle.showName {
                 Text(app.appName)
                     .font(iconStyle.nameFont.font)
-                    .opacity(isSelected ? 1 : 0.7)
-                    .fontWeight(isSelected ? .semibold : .regular)
+                    .opacity(isSelected || isQueued ? 1 : 0.7)
+                    .fontWeight(isSelected || isQueued ? .semibold : .regular)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .foregroundStyle(modeTheme.foregroundStyle)
             }
         }
         .frame(maxWidth: thumbnailWidth.map { max(80, $0 + (reservesSelectionSpace ? 24 : 0)) } ?? max(64, 80 * iconStyle.scale))
-        .opacity(iconStyle.opacity(isSelected: isSelected, hasSelection: hasSelection))
+        .opacity(iconStyle.opacity(isSelected: isSelected || isQueued, hasSelection: hasSelection))
         .padding(12)
         .appContextMenu(for: app)
         .onTapGesture {
+            if multiOpenClick?(app) == true {
+                return
+            }
             if let override = app.overrideTap {
                 override(app)
             } else {

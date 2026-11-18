@@ -127,6 +127,8 @@ struct ContentView: View {
                     }
                 }
                 .environment(\.appContextActions, appContextActions)
+                .environment(\.multiOpenQueue, appState.multiOpenQueue)
+                .environment(\.multiOpenClick, appDelegate.queueClickedEntry)
                 .environment(\.modeTheme, ModeTheme.theme(for: appState.mode))
                 // Icon customisation covers the regular switcher (incl. Hide
                 // and Quit); custom modes keep the default look.

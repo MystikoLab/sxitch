@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Cocoa
 import Combine
 import KeyboardShortcuts
@@ -50,6 +51,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionCheckTimer: Timer?
     var allModifiersHeldPreviously: Bool = false
     var heldModifierKeyCodes: Set<Int64> = []
+    /// Last seen state of the multi-open modifier; its release runs the queue.
+    private var multiOpenWasHeld = false
     private var cancellables = Set<AnyCancellable>()
     private var registeredModeHotkeyIDs: Set<String> = []
 
@@ -233,6 +236,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "switchAlertPosition": "screenBottom",
             "switchAlertPadding": 12.0,
             WindowPreviewSettings.enabledKey: false,
+            MultiOpenSettings.enabledKey: true,
+            MultiOpenSettings.modifierKey: MultiOpenModifier.shift.rawValue,
+            MultiOpenSettings.orderKey: MultiOpenOrder.lastOnTop.rawValue,
         ])
         if #available(macOS 26.0, *) {
             UserDefaults.standard.register(defaults: [
@@ -430,6 +436,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.mode = .normal
         appState.activeModeID = nil
         appState.drillDownApp = nil
+        appState.multiOpenQueue = []
         userState.shared.demoSwitcherVisible = false
 
         // Closed before the reveal: nothing has been visible yet.
@@ -743,7 +750,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func activateKeyboardSelection() {
+    func activateKeyboardSelection(multiOpenHeld: Bool = false) {
         DispatchQueue.main.async {
             guard let selected = self.appState.selectedName else { return }
             if self.appState.drillDownApp != nil {
@@ -761,7 +768,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.closeWindow()
                 }
             } else {
-                self.selectCurrentApp(named: selected)
+                self.pickApp(named: selected, multiOpenHeld: multiOpenHeld)
             }
         }
     }
@@ -805,6 +812,95 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         appState.depth = 0
         appState.typed = ""
+    }
+
+    // MARK: Multi-open (Pro)
+
+    /// Multi-open claims its modifier when enabled and not part of the summon
+    /// hotkey. While claimed, holding it never blocks picking: without Pro the
+    /// pick is simply a regular single select.
+    private var multiOpenOwnsModifier: Bool {
+        MultiOpenSettings.enabled
+            && !MultiOpenSettings.clashes(
+                MultiOpenSettings.modifier,
+                summonFamilies: parseModifierConfig().map(\.family)
+            )
+    }
+
+    private var multiOpenActive: Bool {
+        multiOpenOwnsModifier && proState.isPro
+    }
+
+    /// True when the multi-open modifier is the only ⌘⌥⌃⇧ modifier held.
+    private func onlyMultiOpenModifierHeld(_ flags: CGEventFlags) -> Bool {
+        multiOpenOwnsModifier
+            && flags.intersection([.maskShift, .maskControl, .maskAlternate, .maskCommand])
+            == MultiOpenSettings.modifier.cgFlag
+    }
+
+    /// Single-selects the entry, or queues it while multi-open is held.
+    func pickApp(named name: String, multiOpenHeld: Bool) {
+        if multiOpenHeld, multiOpenActive, appState.drillDownApp == nil {
+            toggleMultiOpen(named: name)
+        } else {
+            selectCurrentApp(named: name)
+        }
+    }
+
+    /// Queues the entry, or drops it if it's already queued.
+    func toggleMultiOpen(named name: String) {
+        if let index = appState.multiOpenQueue.firstIndex(of: name) {
+            appState.multiOpenQueue.remove(at: index)
+        } else {
+            appState.multiOpenQueue.append(name)
+        }
+        appState.depth = 0
+        appState.typed = ""
+    }
+
+    /// Cells offer clicks here first; true means the click was queued.
+    func queueClickedEntry(_ app: any SwitchableApp) -> Bool {
+        guard multiOpenActive, appState.drillDownApp == nil,
+              NSEvent.modifierFlags.contains(MultiOpenSettings.modifier.nsFlag)
+        else { return false }
+        toggleMultiOpen(named: app.appName.lowercased())
+        return true
+    }
+
+    /// Runs the queue once the modifier is released. A single queued entry is
+    /// a regular select (window picker included); a batch skips the picker,
+    /// runs the current mode's action on each entry in turn and closes.
+    func commitMultiOpen() {
+        let names = appState.multiOpenQueue
+        guard !names.isEmpty else { return }
+        appState.multiOpenQueue = []
+        guard window.isVisible else { return }
+        if names.count == 1 {
+            selectCurrentApp(named: names[0])
+            return
+        }
+        let entries = currentEntries()
+        var batch = names.compactMap { name in
+            entries.first { $0.appName.lowercased() == name }
+        }
+        // Captured before closing, which resets the mode to normal.
+        let theme = ModeTheme.theme(for: appState.mode)
+        // Announced once, in selection order; the actions below stay silent so
+        // per-app alerts don't replace it one by one.
+        SwitchAlertController.shared.show(theme.alertVerb, appNames: batch.map(\.appName))
+        // Each action brings its app forward, so the last one ends on top.
+        if MultiOpenSettings.order == .firstOnTop {
+            batch.reverse()
+        }
+        closeWindow()
+        Haptics.perform(.switchApp)
+        for (index, entry) in batch.enumerated() {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + MultiOpenSettings.actionDelay * Double(index)
+            ) {
+                theme.performAppAction(entry)
+            }
+        }
     }
 
     var windowPosition: Position {
@@ -1394,7 +1490,10 @@ extension AppDelegate {
                         $0.appName.lowercased().starts(with: typed.lowercased())
                     }
                     if filteredApps.count == 1 {
-                        self.selectCurrentApp(named: filteredApps[0].appName.lowercased())
+                        self.pickApp(
+                            named: filteredApps[0].appName.lowercased(),
+                            multiOpenHeld: NSEvent.modifierFlags.contains(MultiOpenSettings.modifier.nsFlag)
+                        )
                     }
                 }
             }
@@ -1470,6 +1569,10 @@ extension AppDelegate {
         print("Event tap disabled by \(cause), re-enabling")
         heldModifierKeyCodes.removeAll()
         allModifiersHeldPreviously = false
+        // The release that would have run the queue may be among the missed
+        // events; drop it rather than fire a batch at some later key-up.
+        multiOpenWasHeld = false
+        DispatchQueue.main.async { self.appState.multiOpenQueue = [] }
         CGEvent.tapEnable(tap: tap, enable: true)
     }
 
@@ -1481,6 +1584,41 @@ extension AppDelegate {
             actualStringLength: &length,
             unicodeString: &chars
         )
+        return pickerCharacter(chars, length: length)
+    }
+
+    /// The character `keyCode` types with no modifiers, in the current layout.
+    private func unmodifiedCharacter(keyCode: Int64) -> String? {
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let layoutPointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+        else { return nil }
+        let layoutData = Unmanaged<CFData>.fromOpaque(layoutPointer).takeUnretainedValue() as Data
+        var deadKeyState: UInt32 = 0
+        var chars = [UniChar](repeating: 0, count: 4)
+        var length = 0
+        let status = layoutData.withUnsafeBytes { raw -> OSStatus in
+            guard let layout = raw.bindMemory(to: UCKeyboardLayout.self).baseAddress else {
+                return OSStatus(paramErr)
+            }
+            return UCKeyTranslate(
+                layout,
+                UInt16(keyCode),
+                UInt16(kUCKeyActionDown),
+                0,
+                UInt32(LMGetKbdType()),
+                OptionBits(kUCKeyTranslateNoDeadKeysBit),
+                &deadKeyState,
+                chars.count,
+                &length,
+                &chars
+            )
+        }
+        guard status == noErr else { return nil }
+        return pickerCharacter(chars, length: length)
+    }
+
+    /// A single letter, digit or space, lowercased; anything else isn't typeable.
+    private func pickerCharacter(_ chars: [UniChar], length: Int) -> String? {
         guard length > 0 else { return nil }
         let s = String(utf16CodeUnits: chars, count: length)
         guard s.count == 1, let c = s.first, c.isLetter || c.isNumber || c == " " else { return nil }
@@ -1515,11 +1653,21 @@ extension AppDelegate {
                 guard let flag = flagForKeyCode[code] else { return false }
                 return flags.contains(flag)
             }
+
+            let multiOpenHeld = flags.contains(MultiOpenSettings.modifier.cgFlag)
+            if multiOpenWasHeld, !multiOpenHeld {
+                DispatchQueue.main.async { self.commitMultiOpen() }
+            }
+            multiOpenWasHeld = multiOpenHeld
         }
 
         if keyCode == 53, window.isVisible {
             DispatchQueue.main.async {
-                if self.appState.drillDownApp != nil {
+                if !self.appState.multiOpenQueue.isEmpty {
+                    // Cancel the batch but keep the switcher up; releasing
+                    // the modifier then does nothing.
+                    self.appState.multiOpenQueue = []
+                } else if self.appState.drillDownApp != nil {
                     if self.appState.typed.isEmpty {
                         self.appState.drillDownApp = nil
                     } else {
@@ -1561,30 +1709,37 @@ extension AppDelegate {
            UserDefaults.standard.bool(forKey: "keyboardNavigationEnabled")
         {
             let relevant = flags.intersection([.maskShift, .maskControl, .maskAlternate, .maskCommand])
+            // Holding the multi-open modifier keeps navigation working, and
+            // Return then queues the selection instead of activating it.
+            let multiOpenHeld = onlyMultiOpenModifierHeld(flags)
+            let unmodified = relevant.isEmpty || multiOpenHeld
             // The summon hotkey (a specific key + modifiers) wins over nav keys.
             let summonHeld =
                 savedKeycode != 256
                     && keyCode == Int64(savedKeycode)
                     && modifiersSatisfied(config: parseModifierConfig())
             if !summonHeld {
-                if keyCode == 48, relevant.isEmpty {
-                    DispatchQueue.main.async { self.moveKeyboardSelection(+1) }
-                    return nil
-                }
+                // Shift+Tab stays "back" even when Shift is the multi-open modifier.
                 if keyCode == 48, relevant == .maskShift {
                     DispatchQueue.main.async { self.moveKeyboardSelection(-1) }
                     return nil
                 }
-                if keyCode == 124, relevant.isEmpty {
+                if keyCode == 48, unmodified {
                     DispatchQueue.main.async { self.moveKeyboardSelection(+1) }
                     return nil
                 }
-                if keyCode == 123, relevant.isEmpty {
+                if keyCode == 124, unmodified {
+                    DispatchQueue.main.async { self.moveKeyboardSelection(+1) }
+                    return nil
+                }
+                if keyCode == 123, unmodified {
                     DispatchQueue.main.async { self.moveKeyboardSelection(-1) }
                     return nil
                 }
-                if keyCode == 36 || keyCode == 76, relevant.isEmpty {
-                    DispatchQueue.main.async { self.activateKeyboardSelection() }
+                if keyCode == 36 || keyCode == 76, unmodified {
+                    DispatchQueue.main.async {
+                        self.activateKeyboardSelection(multiOpenHeld: multiOpenHeld)
+                    }
                     return nil
                 }
             }
@@ -1625,7 +1780,11 @@ extension AppDelegate {
             }
         }
 
-        if window.isVisible, flags == CGEventFlags(rawValue: 256) {
+        // Typing with the multi-open modifier held picks apps too — only on the
+        // app list, the window picker has nothing to queue into.
+        let multiOpenTyping =
+            type == .keyDown && appState.drillDownApp == nil && onlyMultiOpenModifierHeld(flags)
+        if window.isVisible, flags == CGEventFlags(rawValue: 256) || multiOpenTyping {
             // Backspace: remove the last typed character so a typo doesn't force
             // Escape + full retype.
             if keyCode == 51, !appState.typed.isEmpty {
@@ -1635,7 +1794,9 @@ extension AppDelegate {
                 }
                 return nil
             }
-            if let letter = typedCharacter(from: event) {
+            // The modifier changes what the key produces (⇧1 is "!", ⌥a is
+            // "å"), so read the key as if it were pressed on its own.
+            if let letter = multiOpenTyping ? unmodifiedCharacter(keyCode: keyCode) : typedCharacter(from: event) {
                 let raw = String(letter)
                 let pickerChar: String
                 if proState.isPro {
@@ -1686,7 +1847,7 @@ extension AppDelegate {
                 if matchingNames.count == 1 {
                     let name = matchingNames[0]
                     DispatchQueue.main.async {
-                        self.selectCurrentApp(named: name)
+                        self.pickApp(named: name, multiOpenHeld: multiOpenTyping)
                     }
                     return nil
                 }

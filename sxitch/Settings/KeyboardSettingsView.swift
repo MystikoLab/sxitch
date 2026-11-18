@@ -50,6 +50,7 @@ struct KeyboardSettingsView: View, SettingsTab {
                     tip: "While the switcher is open, the shortcut toggles the corresponding action mode."
                 )
             }
+            MultiOpenSettingsSection()
             AppHotkeySettingsView()
             Section {
                 HStack {
@@ -133,6 +134,64 @@ struct KeyboardSettingsView: View, SettingsTab {
 
     private func saveOverrides() {
         UserDefaults.standard.keyOverrides = overrides
+    }
+}
+
+// MARK: - Multi-open
+
+struct MultiOpenSettingsSection: View {
+    private var usState = userState.shared
+
+    @AppStorage(MultiOpenSettings.enabledKey) private var enabled = true
+    @AppStorage(MultiOpenSettings.modifierKey) private var modifier = MultiOpenModifier.shift.rawValue
+    @AppStorage(MultiOpenSettings.orderKey) private var order = MultiOpenOrder.lastOnTop.rawValue
+    @AppStorage("hotkey_modifier_config") private var summonConfig: String = "1:right"
+
+    private var clashes: Bool {
+        MultiOpenSettings.clashes(
+            MultiOpenModifier(rawValue: modifier) ?? .shift,
+            summonFamilies: MultiOpenSettings.summonFamilies(from: summonConfig)
+        )
+    }
+
+    var body: some View {
+        Section {
+            Toggle("Enable multi-open", isOn: $enabled)
+                .disabled(!usState.isPro)
+            Picker("Hold to select", selection: $modifier) {
+                ForEach(MultiOpenModifier.allCases, id: \.rawValue) { option in
+                    Text(option.displayName).tag(option.rawValue)
+                }
+            }
+            .disabled(!usState.isPro || !enabled)
+            Picker("Order", selection: $order) {
+                ForEach(MultiOpenOrder.allCases, id: \.rawValue) { option in
+                    Text(option.displayName).tag(option.rawValue)
+                }
+            }
+            .disabled(!usState.isPro || !enabled)
+            if enabled, clashes {
+                Label(
+                    "The switcher hotkey uses this modifier, so multi-open is off. Pick a different one.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            }
+            if !usState.isPro {
+                HStack {
+                    Label("Pro", systemImage: "lock.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
+        } header: {
+            InfoTipHeader(
+                title: "Multi-open",
+                tip: "Hold the modifier while the switcher is open and pick apps by typing, Return or clicking. Release it to run the current mode's action on all of them in the order picked. Picking an app again removes it; Escape clears the selection."
+            )
+        }
     }
 }
 
