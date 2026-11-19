@@ -187,6 +187,11 @@ struct ContentView: View {
                 openWindow(id: "settings")
             }
             .onReceive(
+                NotificationCenter.default.publisher(for: .openOnboardingRequested)
+            ) { _ in
+                openWindow(id: "onboarding")
+            }
+            .onReceive(
                 NotificationCenter.default.publisher(for: .customModesChanged)
             ) { _ in
                 guard appDelegate.window.isVisible else { return }

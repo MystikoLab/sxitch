@@ -138,7 +138,9 @@ func activateKey(key: String) async throws -> Bool {
         print("Failed to store credentials: \(error)")
     }
 
-    return body.licenseKey.status == "granted"
+    let granted = body.licenseKey.status == "granted"
+    recordValidation(granted: granted)
+    return granted
 }
 
 func validateKey(key: String, activationId: String) async throws -> Bool {
@@ -165,6 +167,50 @@ func validateKey(key: String, activationId: String) async throws -> Bool {
 
     let body = try JSONDecoder().decode(PolarKeyValidateRes.self, from: data)
     return body.status == "granted"
+}
+
+// MARK: - Offline Grace Period
+
+/// How long a successful validation keeps Pro alive while the device can't
+/// reach the license server.
+let OFFLINE_GRACE_PERIOD: TimeInterval = 14 * 24 * 60 * 60
+
+private let LAST_VALIDATED_ACCOUNT = "last_validated_at"
+
+/// Errors that mean "couldn't reach the server", as opposed to the server
+/// answering. Only these fall back to the cached validation.
+func isConnectivityError(_ error: Error) -> Bool {
+    guard let urlError = error as? URLError else { return false }
+    switch urlError.code {
+    case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost,
+         .cannotConnectToHost, .timedOut, .dnsLookupFailed:
+        return true
+    default:
+        return false
+    }
+}
+
+/// Stamps a granted result with the current time; any other answer from the
+/// server clears the stamp so a revoked key can't ride out the grace period.
+func recordValidation(granted: Bool) {
+    if granted {
+        try? saveKeychainSecret(
+            account: LAST_VALIDATED_ACCOUNT,
+            secret: String(Date().timeIntervalSince1970)
+        )
+    } else {
+        try? deleteKeychainSecret(account: LAST_VALIDATED_ACCOUNT)
+    }
+}
+
+/// True when the last server-confirmed validation is within the grace period.
+/// A stamp in the future (clock rolled back) is treated as invalid.
+func hasRecentValidation(now: Date = Date()) -> Bool {
+    guard let raw = try? readKeychainSecret(account: LAST_VALIDATED_ACCOUNT),
+          let stamp = TimeInterval(raw)
+    else { return false }
+    let elapsed = now.timeIntervalSince1970 - stamp
+    return elapsed >= 0 && elapsed <= OFFLINE_GRACE_PERIOD
 }
 
 func fetchLicenseInfo(key: String) async throws -> LicenseInfo {
@@ -209,6 +255,7 @@ func getCredentials() throws -> (String, String) {
 func deleteCredentials() throws {
     try deleteKeychainSecret(account: "activation_id")
     try deleteKeychainSecret(account: "key_id")
+    try deleteKeychainSecret(account: LAST_VALIDATED_ACCOUNT)
 }
 
 // MARK: - Low-Level Keychain Operations

@@ -536,6 +536,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    /// Relaunching while already running (Finder, Spotlight, `open`) lands
+    /// here instead of `applicationDidFinishLaunching`.
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows _: Bool) -> Bool {
+        openLaunchWindow()
+        return false
+    }
+
+    /// Settings once onboarding is done, otherwise the onboarding guide.
+    /// Both go through ContentView, which owns the SwiftUI `openWindow`.
+    private func openLaunchWindow() {
+        let name: Notification.Name = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+            ? .openSettingsRequested
+            : .openOnboardingRequested
+        NotificationCenter.default.post(name: name, object: nil)
+    }
+
+    /// True when the system started the app via Launch at Login.
+    private var launchedAsLoginItem: Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent else { return false }
+        return event.eventID == kAEOpenApplication
+            && event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+    }
+
     func closeWindow() {
         closeWindowAnimated()
     }
@@ -1190,10 +1213,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.setContentSize(contentView.fittingSize)
         window.center()
 
-        if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-            window.makeKeyAndOrderFront(nil)
-            appState.depth = 0
-            appState.typed = ""
+        // Onboarding opens itself via OnboardingLauncher. Deferred a runloop
+        // turn so ContentView's notification subscriptions are live.
+        if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding"), !launchedAsLoginItem {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .openSettingsRequested, object: nil)
+            }
         }
 
         NotificationCenter.default.addObserver(
@@ -1544,7 +1569,7 @@ extension AppDelegate {
 
         guard AXIsProcessTrusted() else {
             if permissionCheckTimer == nil {
-                print("Accessibility permission not granted — hotkeys are inactive, polling for it")
+                print("Accessibility permission not granted; hotkeys are inactive, polling for it")
                 permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
                     [weak self] _ in
                     if AXIsProcessTrusted() {

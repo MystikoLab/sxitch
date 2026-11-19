@@ -45,8 +45,21 @@ final class userState {
             // 1. Fetch encrypted tokens from macOS/iOS secure system Keychain
             let (activationId, keyId) = try getCredentials()
 
-            // 2. Validate against Polar API server dynamically
-            let isValid = try await validateKey(key: keyId, activationId: activationId)
+            // 2. Validate against Polar API server dynamically. Offline, fall
+            // back to the last server-confirmed result within the grace period.
+            let isValid: Bool
+            do {
+                isValid = try await validateKey(key: keyId, activationId: activationId)
+                recordValidation(granted: isValid)
+            } catch where isConnectivityError(error) && hasRecentValidation() {
+                await MainActor.run {
+                    self.isPro = true
+                    self.hasValidLicense = true
+                    self.isCheckingLicense = false
+                    self.didCompleteLicenseCheck = true
+                }
+                return
+            }
 
             // 3. Fetch license info (email + activation usage) for the Account page
             if isValid {

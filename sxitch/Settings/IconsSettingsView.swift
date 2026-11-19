@@ -23,6 +23,7 @@ struct IconsSettingsView: View, SettingsTab {
 
     @State private var wallpaperURL: URL?
     @State private var sampleApps: [PreviewSwitchableApp] = []
+    @State private var isAdjustingSlider = false
 
     var body: some View {
         Form {
@@ -54,7 +55,8 @@ struct IconsSettingsView: View, SettingsTab {
                         Button("Reset") { scale = 1 }
                             .disabled(scale == 1)
                     }
-                    Slider(value: $scale, in: IconStyle.scaleRange, step: 0.05)
+                    Slider(value: $scale, in: IconStyle.scaleRange, step: 0.05, onEditingChanged: sliderEditingChanged)
+                        .onChange(of: scale) { _, _ in sliderStepped() }
                 }
             } header: {
                 InfoTipHeader(title: "Size", tip: "Applies to the regular switcher, including Hide and Quit modes.")
@@ -94,7 +96,8 @@ struct IconsSettingsView: View, SettingsTab {
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
-                    Slider(value: $dimOpacity, in: IconStyle.dimOpacityRange, step: 0.05)
+                    Slider(value: $dimOpacity, in: IconStyle.dimOpacityRange, step: 0.05, onEditingChanged: sliderEditingChanged)
+                        .onChange(of: dimOpacity) { _, _ in sliderStepped() }
                 }
                 .disabled(!dimUnselected)
                 VStack(alignment: .leading, spacing: 6) {
@@ -106,7 +109,8 @@ struct IconsSettingsView: View, SettingsTab {
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
-                    Slider(value: $spacing, in: IconStyle.spacingRange, step: 1)
+                    Slider(value: $spacing, in: IconStyle.spacingRange, step: 1, onEditingChanged: sliderEditingChanged)
+                        .onChange(of: spacing) { _, _ in sliderStepped() }
                 }
             } header: {
                 proHeader("Arrangement", tip: "How icons sit relative to each other.")
@@ -149,6 +153,24 @@ struct IconsSettingsView: View, SettingsTab {
         if let screen = NSScreen.main ?? screens.first {
             wallpaperURL = NSWorkspace.shared.desktopImageURL(for: screen)
         }
+    }
+
+    private func sliderEditingChanged(_ editing: Bool) {
+        isAdjustingSlider = editing
+        if !editing {
+            performHaptic(.generic)
+        }
+    }
+
+    /// Alignment ticks match the slider step; the performer coalesces rapid
+    /// repeats on its own. Skipped for programmatic changes like Reset.
+    private func sliderStepped() {
+        guard isAdjustingSlider else { return }
+        performHaptic(.alignment)
+    }
+
+    private func performHaptic(_ pattern: NSHapticFeedbackManager.FeedbackPattern) {
+        NSHapticFeedbackManager.defaultPerformer.perform(pattern, performanceTime: .now)
     }
 
     @MainActor

@@ -30,7 +30,7 @@ struct AppearanceSettingsView: View, SettingsTab {
             Section {
                 HStack {
                     Toggle("Show picker UI", isOn: $showUi)
-                    SettingInfoTip(text: "Turn off to run Sxitch invisibly — apps still activate, but the switcher panel is never drawn.")
+                    SettingInfoTip(text: "Turn off to run Sxitch invisibly. Apps still activate, but the switcher panel is never drawn.")
                 }
                 HStack {
                     Toggle("Show menubar icon", isOn: $showMenuIcon)
