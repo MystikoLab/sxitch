@@ -151,6 +151,13 @@ struct ContentView: View {
 
     var body: some View {
         switcher
+            .coordinateSpace(name: NavigationLayout.coordinateSpace)
+            .onPreferenceChange(NavigationPointsKey.self) { points in
+                appState.navigationLayout.points = points
+            }
+            .onPreferenceChange(NavigationFlowAxisKey.self) { axis in
+                appState.navigationLayout.flowAxis = axis
+            }
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.typed)
             .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.mode)
             .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.activeModeID)

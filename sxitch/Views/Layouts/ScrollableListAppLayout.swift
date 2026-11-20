@@ -20,6 +20,7 @@ struct ScrollableListAppLayout: View {
                             hasSelection: selection != nil
                         )
                         .id(app.id)
+                        .navigationPoint(app.appName.lowercased())
                     }
                 }
                 .fixedSize(horizontal: true, vertical: false)
@@ -35,6 +36,7 @@ struct ScrollableListAppLayout: View {
             }
         }
         .frame(maxHeight: maxPanelHeight)
+        .navigationFlowAxis(.vertical)
     }
 
     private func isSelected(_ app: any SwitchableApp) -> Bool {

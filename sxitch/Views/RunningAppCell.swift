@@ -10,6 +10,9 @@ struct RunningAppCell: View {
     var reservesSelectionSpace: Bool = true
     /// Width of the window thumbnail replacing the icon; nil shows the icon.
     var previewWidth: CGFloat? = nil
+    /// How the keyboard selection is drawn: an accent outline, or a soft
+    /// accent fill behind the icon (radial, where outlines read as clutter).
+    var selectionStyle: SelectionStyle = .outline
     /// Whether anything in the switcher is selected, so unselected cells
     /// only dim while there's a selection to contrast with.
     var hasSelection: Bool = false
@@ -19,6 +22,16 @@ struct RunningAppCell: View {
     @Environment(\.multiOpenQueue) private var multiOpenQueue
     @Environment(\.multiOpenClick) private var multiOpenClick
     @ObservedObject private var previewStore = WindowPreviewStore.shared
+    @AppStorage(KeyboardNavigationSettings.radialSelectionOpacityKey) private var selectionFillOpacity = 0.25
+
+    enum SelectionStyle {
+        case outline, fill
+    }
+
+    private var backgroundOpacity: Double {
+        let selected = isSelected && selectionStyle == .fill ? selectionFillOpacity : 0
+        return max(selected, isQueued ? 0.3 : 0)
+    }
 
     private var isQueued: Bool {
         multiOpenQueue.contains(app.appName.lowercased())
@@ -77,11 +90,11 @@ struct RunningAppCell: View {
             .padding(reservesSelectionSpace ? 12 : 0)
             .background(
                 RoundedRectangle(cornerRadius: 22)
-                    .fill(accentColor.opacity(isQueued ? 0.3 : 0))
+                    .fill(accentColor.opacity(backgroundOpacity))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 22)
-                    .strokeBorder(isSelected ? accentColor : .clear, lineWidth: 3)
+                    .strokeBorder(isSelected && selectionStyle == .outline ? accentColor : .clear, lineWidth: 3)
             )
             .animation(.easeOut(duration: 0.12), value: isSelected)
             .animation(.easeOut(duration: 0.12), value: isQueued)

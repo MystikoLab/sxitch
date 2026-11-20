@@ -24,6 +24,7 @@ struct ListAppLayout: View {
                             isSelected: isSelected(app),
                             hasSelection: selection != nil
                         )
+                        .navigationPoint(app.appName.lowercased())
                     }
                 }
                 // Columns take their widest row's width instead of whatever
@@ -32,6 +33,7 @@ struct ListAppLayout: View {
             }
         }
         .padding(6)
+        .navigationFlowAxis(.vertical)
     }
 
     private func isSelected(_ app: any SwitchableApp) -> Bool {

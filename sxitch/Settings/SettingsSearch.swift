@@ -22,6 +22,7 @@ enum SettingsSearchIndex {
 
         // General › App
         SettingsSearchEntry(tabID: "app", title: "Tab based navigation", keywords: ["keyboard navigation", "tab", "arrow keys", "enter", "return", "selection"]),
+        SettingsSearchEntry(tabID: "app", title: "Directional arrow keys", keywords: ["smart arrows", "up", "down", "arrow keys", "radial", "grid", "rows"]),
         SettingsSearchEntry(tabID: "app", title: "Permissions", keywords: ["accessibility", "screen recording"]),
         SettingsSearchEntry(tabID: "app", title: "Launch at login", keywords: ["startup", "login items"]),
         SettingsSearchEntry(tabID: "app", title: "Revisit the setup guide", keywords: ["onboarding", "guide", "tour"]),
@@ -31,6 +32,7 @@ enum SettingsSearchIndex {
         SettingsSearchEntry(tabID: "appearance", title: "Show menubar icon", keywords: ["menu bar", "status item"]),
         SettingsSearchEntry(tabID: "appearance", title: "Liquid Glass", keywords: ["material", "transparency"]),
         SettingsSearchEntry(tabID: "appearance", title: "Accent Colour", keywords: ["color", "theme", "tint"]),
+        SettingsSearchEntry(tabID: "appearance", title: "Radial selection opacity", keywords: ["highlight", "circle", "keyboard selection", "background"]),
 
         // Theming › Layout
         SettingsSearchEntry(tabID: "layout", title: "Layout", keywords: ["grid", "list", "circle", "scrollable", "scroll list"]),

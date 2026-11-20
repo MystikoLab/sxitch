@@ -10,6 +10,7 @@ struct AppSettingsView: View, SettingsTab {
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
     @AppStorage("keyboardNavigationEnabled") private var tabBasedNavigation = true
+    @AppStorage(KeyboardNavigationSettings.smartArrowsKey) private var smartArrowNavigation = true
     @Environment(\.openWindow) private var openWindow
     @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
     @State private var screenRecordingGranted: Bool = CGPreflightScreenCaptureAccess()
@@ -78,6 +79,13 @@ struct AppSettingsView: View, SettingsTab {
                         text: "While the switcher is open, Tab or the arrow keys move the selection and Return switches to it. Shift+Tab moves backwards. The selection wraps around at the ends."
                     )
                 }
+                HStack {
+                    Toggle("Directional arrow keys", isOn: $smartArrowNavigation)
+                    SettingInfoTip(
+                        text: "Arrow keys move to the app that's visually in that direction: Up and Down jump between rows in the grid, Left and Right between columns in the list, and every arrow follows the layout in radial view. When off, Up and Left step backwards and Down and Right step forwards, like Tab."
+                    )
+                }
+                .disabled(!tabBasedNavigation)
             }
 
             Section {

@@ -221,6 +221,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "hotkey_keycode": 256,
             "keyboardNavigationEnabled": true,
+            KeyboardNavigationSettings.smartArrowsKey: true,
+            KeyboardNavigationSettings.radialSelectionOpacityKey: 0.25,
             "windowPickerEnabled": true,
             "switcherAnimationStyle": SwitcherAnimation.fade.rawValue,
             "animationSpeedMultiplier": 1.0,
@@ -775,6 +777,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Wrap around: step past the ends loops back to the other side.
             index = (index + delta + names.count) % names.count
             self.appState.selectedName = names[index]
+        }
+    }
+
+    /// Arrow keys: move to the item that's visually in that direction when
+    /// smart arrows are on, otherwise step through the list like Tab.
+    func moveKeyboardSelection(_ direction: NavigationDirection) {
+        DispatchQueue.main.async {
+            let names = self.keyboardSelectableNames()
+            if KeyboardNavigationSettings.smartArrowsEnabled,
+               let current = self.appState.selectedName,
+               let target = self.appState.navigationLayout.target(
+                   from: current, direction: direction, in: names
+               )
+            {
+                self.appState.selectedName = target
+                return
+            }
+            self.moveKeyboardSelection(direction.linearDelta)
         }
     }
 
@@ -1790,12 +1810,11 @@ extension AppDelegate {
                     DispatchQueue.main.async { self.moveKeyboardSelection(+1) }
                     return nil
                 }
-                if keyCode == 124, unmodified {
-                    DispatchQueue.main.async { self.moveKeyboardSelection(+1) }
-                    return nil
-                }
-                if keyCode == 123, unmodified {
-                    DispatchQueue.main.async { self.moveKeyboardSelection(-1) }
+                let arrows: [Int64: NavigationDirection] = [
+                    123: .left, 124: .right, 125: .down, 126: .up,
+                ]
+                if let direction = arrows[keyCode], unmodified {
+                    DispatchQueue.main.async { self.moveKeyboardSelection(direction) }
                     return nil
                 }
                 if keyCode == 36 || keyCode == 76, unmodified {

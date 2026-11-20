@@ -86,6 +86,7 @@ struct WindowPickerView: View {
                     }
                     .scrollSelectionIntoView(selection, ids: windows.map(\.title))
                 }
+                .navigationFlowAxis(.vertical)
             } else {
                 ScrollViewReader { _ in
                     ScrollView {
@@ -104,6 +105,7 @@ struct WindowPickerView: View {
                     }
                     .scrollSelectionIntoView(selection, ids: windows.map(\.title))
                 }
+                .navigationFlowAxis(.horizontal)
             }
         }
         .frame(width: panelWidth)
@@ -155,6 +157,7 @@ struct WindowPickerView: View {
         )
         .animation(.easeOut(duration: 0.12), value: isSelected(window))
         .id(window.title)
+        .navigationPoint(window.title)
         .onTapGesture {
             modeTheme.windowAction(window)
             onSelect()
@@ -196,6 +199,7 @@ struct WindowPickerView: View {
         )
         .contentShape(Rectangle())
         .id(window.title)
+        .navigationPoint(window.title)
         .onTapGesture {
             modeTheme.windowAction(window)
             onSelect()

@@ -48,11 +48,13 @@ struct GridAppLayout: View {
                             previewWidth: activePreviewWidth,
                             hasSelection: selection != nil
                         )
+                        .navigationPoint(app.appName.lowercased())
                     }
                 }
             }
         }
         .frame(alignment: .center)
+        .navigationFlowAxis(.horizontal)
     }
 
     private func isSelected(_ app: any SwitchableApp) -> Bool {

@@ -9,6 +9,7 @@ struct AppearanceSettingsView: View, SettingsTab {
     @AppStorage("liquidGlass") var liquidGlass: Bool = true
     @AppStorage("showPickerUi") var showUi = true
     @AppStorage("showMenuIcon") var showMenuIcon: Bool = true
+    @AppStorage(KeyboardNavigationSettings.radialSelectionOpacityKey) var radialSelectionOpacity = 0.25
 
     private var usState = userState.shared
 
@@ -83,6 +84,20 @@ struct AppearanceSettingsView: View, SettingsTab {
                     }
                 }
                 .padding(.vertical, 4)
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Radial selection opacity")
+                        SettingInfoTip(text: "How strongly the keyboard-selected app is highlighted in the radial layout, which shows the selection as a tinted background instead of an outline.")
+                        Spacer()
+                        Text("\(Int((radialSelectionOpacity * 100).rounded()))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: $radialSelectionOpacity, in: KeyboardNavigationSettings.radialSelectionOpacityRange, step: 0.05)
+                }
             }
         }
         .formStyle(.grouped)

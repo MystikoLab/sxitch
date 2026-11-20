@@ -9,6 +9,7 @@ struct WindowPickerCircleLayout: View {
     let onSelect: () -> Void
 
     @Environment(\.modeTheme) var modeTheme
+    @AppStorage(KeyboardNavigationSettings.radialSelectionOpacityKey) private var selectionFillOpacity = 0.25
 
     private let centerDiscSize: CGFloat = 150
     private let tileIconSize: CGFloat = 44
@@ -85,6 +86,7 @@ struct WindowPickerCircleLayout: View {
             }
         }
         .frame(width: overallDiameter, height: overallDiameter)
+        .navigationFlowAxis(nil)
     }
 
     private var overallDiameter: CGFloat {
@@ -143,6 +145,7 @@ struct WindowPickerCircleLayout: View {
                 let y = r * CGFloat(sin(angle))
 
                 windowTile(window)
+                    .navigationPoint(window.title)
                     .offset(x: x, y: y)
             }
         }
@@ -175,11 +178,11 @@ struct WindowPickerCircleLayout: View {
                 .frame(maxWidth: slotSize - 20)
         }
         .frame(width: slotSize - 16, height: slotSize - 16)
-        .contentShape(Rectangle())
-        .overlay(
+        .background(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(selectedColor.opacity(isSelected(window) ? 0.9 : 0), lineWidth: 3)
+                .fill(selectedColor.opacity(isSelected(window) ? selectionFillOpacity : 0))
         )
+        .contentShape(Rectangle())
         .animation(.easeOut(duration: 0.12), value: isSelected(window))
         .onTapGesture {
             modeTheme.windowAction(window)

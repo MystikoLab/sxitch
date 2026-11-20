@@ -72,6 +72,7 @@ struct CircleAppLayout: View {
             }
         }
         .frame(width: overallDiameter, height: overallDiameter)
+        .navigationFlowAxis(nil)
     }
 
     private var overallDiameter: CGFloat {
@@ -110,8 +111,10 @@ struct CircleAppLayout: View {
                     onTap: onTap,
                     isSelected: isSelected(app),
                     reservesSelectionSpace: keyboardNavigationEnabled,
+                    selectionStyle: .fill,
                     hasSelection: selection != nil
                 )
+                .navigationPoint(app.appName.lowercased())
                 .offset(x: x, y: y)
             }
         }
