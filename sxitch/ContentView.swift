@@ -14,6 +14,7 @@ struct ContentView: View {
     @AppStorage("pinned_app_urls") var pinnedAppURLs: [String] = []
     @AppStorage("layoutStyle") var layoutStyle: String = "grid"
     @AppStorage("showPickerUi") private var showUi = true
+    private var iconSettings = IconStyleSettings()
 
     @ObservedObject var appState: AppState
     @State private var drillDownWindows: [WindowInfo] = []
@@ -35,15 +36,15 @@ struct ContentView: View {
     /// Entries after the typed-prefix filter — the same list every layout
     /// renders, and the space keyboard selection moves through.
     var filteredEntries: [any SwitchableApp] {
-        let typedLower = appState.typed.lowercased()
-        guard !typedLower.isEmpty else { return displayedEntries }
-        return displayedEntries.filter { $0.appName.lowercased().starts(with: typedLower) }
+        let typed = appState.typed
+        guard !typed.isEmpty else { return displayedEntries }
+        return displayedEntries.filter { $0.appName.matchesTyped(typed) }
     }
 
     private var filteredDrillWindows: [WindowInfo] {
-        let typedLower = appState.typed.lowercased()
-        guard !typedLower.isEmpty else { return drillDownWindows }
-        return drillDownWindows.filter { $0.title.lowercased().starts(with: typedLower) }
+        let typed = appState.typed
+        guard !typed.isEmpty else { return drillDownWindows }
+        return drillDownWindows.filter { $0.title.matchesTyped(typed) }
     }
 
     private var keyboardNavigationEnabled: Bool {
@@ -126,7 +127,12 @@ struct ContentView: View {
                     }
                 }
                 .environment(\.appContextActions, appContextActions)
+                .environment(\.multiOpenQueue, appState.multiOpenQueue)
+                .environment(\.multiOpenClick, appDelegate.queueClickedEntry)
                 .environment(\.modeTheme, ModeTheme.theme(for: appState.mode))
+                // Icon customisation covers the regular switcher (incl. Hide
+                // and Quit); custom modes keep the default look.
+                .environment(\.iconStyle, appState.activeModeID == nil ? iconSettings.style : .default)
                 .id("\(appState.mode.rawValue)-\(appState.activeModeID ?? "default")")
             }
         }
@@ -145,6 +151,13 @@ struct ContentView: View {
 
     var body: some View {
         switcher
+            .coordinateSpace(name: NavigationLayout.coordinateSpace)
+            .onPreferenceChange(NavigationPointsKey.self) { points in
+                appState.navigationLayout.points = points
+            }
+            .onPreferenceChange(NavigationFlowAxisKey.self) { axis in
+                appState.navigationLayout.flowAxis = axis
+            }
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.typed)
             .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.mode)
             .animation(.spring(response: 0.25, dampingFraction: 0.65), value: appState.activeModeID)
@@ -173,11 +186,17 @@ struct ContentView: View {
             ) { _ in
                 reloadEntries()
                 resetSelection()
+                refreshAppPreviews()
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .openSettingsRequested)
             ) { _ in
                 openWindow(id: "settings")
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: .openOnboardingRequested)
+            ) { _ in
+                openWindow(id: "onboarding")
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .customModesChanged)
@@ -198,7 +217,7 @@ struct ContentView: View {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
                         appState.activeModeID = nil
                     }
-                    appDelegate.resizeWindowToFit(force: true)
+                    appDelegate.animateResizeForModeChange()
                 } else {
                     appDelegate.closeWindow()
                 }
@@ -221,6 +240,7 @@ struct ContentView: View {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                         reloadEntries()
                     }
+                    refreshAppPreviews()
                 }
                 resetSelection()
             }
@@ -228,8 +248,12 @@ struct ContentView: View {
                 if let app = newApp {
                     drillDownWindows = fetchWindowsForApp(app)
                     appState.typed = ""
+                    if WindowPreviewSettings.layoutSupportsPreviews(layoutStyle) {
+                        WindowPreviewStore.shared.refreshWindows(drillDownWindows.compactMap(\.windowID))
+                    }
                 } else {
                     drillDownWindows = []
+                    refreshAppPreviews()
                 }
                 resetSelection()
             }
@@ -243,6 +267,16 @@ struct ContentView: View {
 
     func reloadEntries() {
         openApps = appDelegate.currentEntries()
+    }
+
+    /// Snapshots each running app's frontmost window for the thumbnails.
+    /// List layouts never show previews, so skip the capture there.
+    private func refreshAppPreviews() {
+        guard WindowPreviewSettings.layoutSupportsPreviews(layoutStyle) else {
+            return WindowPreviewStore.shared.clear()
+        }
+        let pids = displayedEntries.compactMap { $0.runningApplication?.processIdentifier }
+        WindowPreviewStore.shared.refreshApps(pids)
     }
 
     private func blacklistApp(_ app: any SwitchableApp) {

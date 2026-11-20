@@ -31,6 +31,7 @@ extension Notification.Name {
     static let onboardingCompleted = Notification.Name("onboardingCompleted")
     static let switcherWillShow = Notification.Name("sxitch.switcherWillShow")
     static let openSettingsRequested = Notification.Name("sxitch.openSettingsRequested")
+    static let openOnboardingRequested = Notification.Name("sxitch.openOnboardingRequested")
     static let appSettingsChanged = Notification.Name("appSettingsChanged")
     static let customModesChanged = Notification.Name("sxitch.customModesChanged")
     static let appRenamesChanged = Notification.Name("sxitch.appRenamesChanged")

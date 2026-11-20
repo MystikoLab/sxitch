@@ -9,10 +9,12 @@ struct WindowPickerCircleLayout: View {
     let onSelect: () -> Void
 
     @Environment(\.modeTheme) var modeTheme
+    @AppStorage(KeyboardNavigationSettings.radialSelectionOpacityKey) private var selectionFillOpacity = 0.25
 
     private let centerDiscSize: CGFloat = 150
     private let tileIconSize: CGFloat = 44
     private let slotSize: CGFloat = 110
+    private let ringEdgeSoftness: CGFloat = 1.5 // glass rim feather, in points
     private let ringGap: CGFloat = 20 // clearance BETWEEN ring edges, not center-to-center
     private let ringIncrement: Int = 5
 
@@ -84,6 +86,7 @@ struct WindowPickerCircleLayout: View {
             }
         }
         .frame(width: overallDiameter, height: overallDiameter)
+        .navigationFlowAxis(nil)
     }
 
     private var overallDiameter: CGFloat {
@@ -112,7 +115,7 @@ struct WindowPickerCircleLayout: View {
                 .opacity(0.5)
         }
         .frame(width: centerDiscSize, height: centerDiscSize)
-        .background(Circle().fill(.ultraThinMaterial))
+        .glassSurface(in: Circle())
         .contentShape(Circle())
     }
 
@@ -125,19 +128,15 @@ struct WindowPickerCircleLayout: View {
         let spacing = totalAngle / Double(segments)
 
         ZStack {
-            ForEach(Array(ringWindows.enumerated()), id: \.element.id) { index, _ in
-                let t = Double(index) / Double(segments)
-                let angle = startAngle + t * totalAngle
-                let halfSpan = spacing / 2
-
-                ArcSegment(
-                    innerRadius: r - slotSize / 2,
-                    outerRadius: r + slotSize / 2,
-                    startAngle: Angle(radians: angle - halfSpan),
-                    endAngle: Angle(radians: angle + halfSpan)
-                )
-                .fill(.ultraThinMaterial)
-            }
+            // One arc per ring filled once, so the material samples the
+            // backdrop as a single surface instead of tinting per slot.
+            let lastAngle = startAngle + Double(max(count - 1, 0)) / Double(segments) * totalAngle
+            Color.clear.glassSurface(in: ArcSegment(
+                innerRadius: r - slotSize / 2,
+                outerRadius: r + slotSize / 2,
+                startAngle: Angle(radians: startAngle - spacing / 2),
+                endAngle: Angle(radians: lastAngle + spacing / 2)
+            ), edgeSoftness: ringEdgeSoftness)
 
             ForEach(Array(ringWindows.enumerated()), id: \.element.id) { index, window in
                 let t = Double(index) / Double(segments)
@@ -146,6 +145,7 @@ struct WindowPickerCircleLayout: View {
                 let y = r * CGFloat(sin(angle))
 
                 windowTile(window)
+                    .navigationPoint(window.title)
                     .offset(x: x, y: y)
             }
         }
@@ -159,9 +159,7 @@ struct WindowPickerCircleLayout: View {
                     .frame(width: tileIconSize, height: tileIconSize)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                if let nextChar = window.title.dropFirst(typed.count).first(where: {
-                    !$0.isWhitespace
-                }) {
+                if let nextChar = window.title.nextTypedCharacter(afterTyped: typed.count) {
                     Text(String(nextChar).uppercased())
                         .font(.caption2)
                         .padding(3)
@@ -180,11 +178,11 @@ struct WindowPickerCircleLayout: View {
                 .frame(maxWidth: slotSize - 20)
         }
         .frame(width: slotSize - 16, height: slotSize - 16)
-        .contentShape(Rectangle())
-        .overlay(
+        .background(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(selectedColor.opacity(isSelected(window) ? 0.9 : 0), lineWidth: 3)
+                .fill(selectedColor.opacity(isSelected(window) ? selectionFillOpacity : 0))
         )
+        .contentShape(Rectangle())
         .animation(.easeOut(duration: 0.12), value: isSelected(window))
         .onTapGesture {
             modeTheme.windowAction(window)

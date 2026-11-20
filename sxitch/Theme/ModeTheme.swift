@@ -3,14 +3,24 @@ import SwiftUI
 struct ModeTheme {
     let overlayColor: Color
     let foregroundStyle: Color
-    let appAction: (any SwitchableApp) -> Void
+    let alertVerb: SwitchAlertController.Verb
+    /// The mode's action without its alert; multi-open batches run this and
+    /// announce the whole batch in one alert instead.
+    let performAppAction: (any SwitchableApp) -> Void
     let windowAction: (WindowInfo) -> Void
+
+    var appAction: (any SwitchableApp) -> Void {
+        { [alertVerb, performAppAction] app in
+            SwitchAlertController.shared.show(alertVerb, appName: app.appName)
+            performAppAction(app)
+        }
+    }
 
     static let normal = ModeTheme(
         overlayColor: .clear,
         foregroundStyle: .primary,
-        appAction: { app in
-            SwitchAlertController.shared.show(.opening, appName: app.appName)
+        alertVerb: .opening,
+        performAppAction: { app in
             app.activate()
         },
         windowAction: { window in
@@ -23,8 +33,8 @@ struct ModeTheme {
     static let hide = ModeTheme(
         overlayColor: .orange.opacity(0.7),
         foregroundStyle: Color.orange.opacity(0.8),
-        appAction: { app in
-            SwitchAlertController.shared.show(.hiding, appName: app.appName)
+        alertVerb: .hiding,
+        performAppAction: { app in
             app.hideApp()
         },
         windowAction: { window in
@@ -38,8 +48,8 @@ struct ModeTheme {
     static let quit = ModeTheme(
         overlayColor: .red.opacity(0.7),
         foregroundStyle: Color.red.opacity(0.8),
-        appAction: { app in
-            SwitchAlertController.shared.show(.quitting, appName: app.appName)
+        alertVerb: .quitting,
+        performAppAction: { app in
             app.quitApp()
         },
         windowAction: { window in

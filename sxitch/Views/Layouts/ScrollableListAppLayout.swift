@@ -16,11 +16,14 @@ struct ScrollableListAppLayout: View {
                             app: app,
                             depth: typed.count,
                             onTap: onTap,
-                            isSelected: isSelected(app)
+                            isSelected: isSelected(app),
+                            hasSelection: selection != nil
                         )
                         .id(app.id)
+                        .navigationPoint(app.appName.lowercased())
                     }
                 }
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(6)
             }
             .onChange(of: selection) { _, newValue in
@@ -33,6 +36,7 @@ struct ScrollableListAppLayout: View {
             }
         }
         .frame(maxHeight: maxPanelHeight)
+        .navigationFlowAxis(.vertical)
     }
 
     private func isSelected(_ app: any SwitchableApp) -> Bool {

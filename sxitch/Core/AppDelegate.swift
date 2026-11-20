@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Cocoa
 import Combine
 import KeyboardShortcuts
@@ -50,6 +51,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionCheckTimer: Timer?
     var allModifiersHeldPreviously: Bool = false
     var heldModifierKeyCodes: Set<Int64> = []
+    /// Last seen state of the multi-open modifier; its release runs the queue.
+    private var multiOpenWasHeld = false
     private var cancellables = Set<AnyCancellable>()
     private var registeredModeHotkeyIDs: Set<String> = []
 
@@ -218,6 +221,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "hotkey_keycode": 256,
             "keyboardNavigationEnabled": true,
+            KeyboardNavigationSettings.smartArrowsKey: true,
+            KeyboardNavigationSettings.radialSelectionOpacityKey: 0.25,
+            "windowPickerEnabled": true,
             "switcherAnimationStyle": SwitcherAnimation.fade.rawValue,
             "animationSpeedMultiplier": 1.0,
             "openCloseAnimationsEnabled": true,
@@ -231,6 +237,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "switchAlertsEnabled": true,
             "switchAlertPosition": "screenBottom",
             "switchAlertPadding": 12.0,
+            WindowPreviewSettings.enabledKey: false,
+            WindowPreviewSettings.sizeKey: WindowPreviewSize.medium.rawValue,
+            MultiOpenSettings.enabledKey: true,
+            MultiOpenSettings.modifierKey: MultiOpenModifier.shift.rawValue,
+            MultiOpenSettings.orderKey: MultiOpenOrder.lastOnTop.rawValue,
         ])
         if #available(macOS 26.0, *) {
             UserDefaults.standard.register(defaults: [
@@ -245,6 +256,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Final placement snapshotted by `prepareOpenAnimation` for animated
     /// styles that temporarily offset the window (slide).
     private var pendingOpenFrame: NSRect?
+    /// The panel's frame as of its last placement, so a resize can be
+    /// re-anchored around where it was rather than where AppKit left it.
+    private var lastAnchoredFrame: NSRect?
     /// Debounces the burst of `didMove` notifications while a drag is in
     /// flight; only the settled frame is saved as the custom position.
     private var customPositionSaveWork: DispatchWorkItem?
@@ -277,6 +291,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// instead of the previous summon's size re-centering on screen.
     func presentSwitcher(makeKey: Bool = false) {
         pendingPresentation?.cancel()
+        // A mode resize still waiting to run would race the summon's sizing.
+        pendingModeResize?.cancel()
+        pendingModeResize = nil
+        isModeResizeAnimating = false
         isOpenAnimating = false
         pendingOpenFrame = nil
         window.alphaValue = 0
@@ -291,6 +309,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             pendingPresentation = nil
             resizeWindowToFit(force: true)
             positionWindow()
+            lastAnchoredFrame = window.frame
             prepareOpenAnimation()
             playOpenAnimation()
         }
@@ -424,6 +443,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.mode = .normal
         appState.activeModeID = nil
         appState.drillDownApp = nil
+        appState.multiOpenQueue = []
         userState.shared.demoSwitcherVisible = false
 
         // Closed before the reveal: nothing has been visible yet.
@@ -516,6 +536,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         return false
+    }
+
+    /// Relaunching while already running (Finder, Spotlight, `open`) lands
+    /// here instead of `applicationDidFinishLaunching`.
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows _: Bool) -> Bool {
+        openLaunchWindow()
+        return false
+    }
+
+    /// Settings once onboarding is done, otherwise the onboarding guide.
+    /// Both go through ContentView, which owns the SwiftUI `openWindow`.
+    private func openLaunchWindow() {
+        let name: Notification.Name = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+            ? .openSettingsRequested
+            : .openOnboardingRequested
+        NotificationCenter.default.post(name: name, object: nil)
+    }
+
+    /// True when the system started the app via Launch at Login.
+    private var launchedAsLoginItem: Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent else { return false }
+        return event.eventID == kAEOpenApplication
+            && event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
     }
 
     func closeWindow() {
@@ -630,7 +673,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         self.appState.typed = ""
                         self.appState.depth = 0
                     }
-                    self.resizeWindowToFit(force: true)
+                    self.animateResizeForModeChange()
                 }
             } else {
                 // Hidden: swap content before the summon so its first visible frame is
@@ -714,13 +757,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// while drilling down. Read from the tap caches so a keypress never
     /// enumerates apps or windows.
     private func keyboardSelectableNames() -> [String] {
-        let typedLower = appState.typed.lowercased()
+        let typed = appState.typed
         if appState.drillDownApp != nil {
             return tapDrillWindows()
-                .filter { $0.title.lowercased().hasPrefix(typedLower) }
+                .filter { $0.title.matchesTyped(typed) }
                 .map(\.title)
         }
-        return tapAppNames().filter { $0.hasPrefix(typedLower) }
+        return tapAppNames().filter { $0.matchesTyped(typed) }
     }
 
     func moveKeyboardSelection(_ delta: Int) {
@@ -737,13 +780,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func activateKeyboardSelection() {
+    /// Arrow keys: move to the item that's visually in that direction when
+    /// smart arrows are on, otherwise step through the list like Tab.
+    func moveKeyboardSelection(_ direction: NavigationDirection) {
+        DispatchQueue.main.async {
+            let names = self.keyboardSelectableNames()
+            if KeyboardNavigationSettings.smartArrowsEnabled,
+               let current = self.appState.selectedName,
+               let target = self.appState.navigationLayout.target(
+                   from: current, direction: direction, in: names
+               )
+            {
+                self.appState.selectedName = target
+                return
+            }
+            self.moveKeyboardSelection(direction.linearDelta)
+        }
+    }
+
+    func activateKeyboardSelection(multiOpenHeld: Bool = false) {
         DispatchQueue.main.async {
             guard let selected = self.appState.selectedName else { return }
             if self.appState.drillDownApp != nil {
-                let typedLower = self.appState.typed.lowercased()
+                let typed = self.appState.typed
                 let visible = self.tapDrillWindows().filter {
-                    $0.title.lowercased().hasPrefix(typedLower)
+                    $0.title.matchesTyped(typed)
                 }
                 guard let matching = visible.first(where: { $0.title == selected }) else { return }
                 let theme = ModeTheme.theme(for: self.appState.mode)
@@ -755,7 +816,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.closeWindow()
                 }
             } else {
-                self.selectCurrentApp(named: selected)
+                self.pickApp(named: selected, multiOpenHeld: multiOpenHeld)
             }
         }
     }
@@ -799,6 +860,95 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         appState.depth = 0
         appState.typed = ""
+    }
+
+    // MARK: Multi-open (Pro)
+
+    /// Multi-open claims its modifier when enabled and not part of the summon
+    /// hotkey. While claimed, holding it never blocks picking: without Pro the
+    /// pick is simply a regular single select.
+    private var multiOpenOwnsModifier: Bool {
+        MultiOpenSettings.enabled
+            && !MultiOpenSettings.clashes(
+                MultiOpenSettings.modifier,
+                summonFamilies: parseModifierConfig().map(\.family)
+            )
+    }
+
+    private var multiOpenActive: Bool {
+        multiOpenOwnsModifier && proState.isPro
+    }
+
+    /// True when the multi-open modifier is the only ⌘⌥⌃⇧ modifier held.
+    private func onlyMultiOpenModifierHeld(_ flags: CGEventFlags) -> Bool {
+        multiOpenOwnsModifier
+            && flags.intersection([.maskShift, .maskControl, .maskAlternate, .maskCommand])
+            == MultiOpenSettings.modifier.cgFlag
+    }
+
+    /// Single-selects the entry, or queues it while multi-open is held.
+    func pickApp(named name: String, multiOpenHeld: Bool) {
+        if multiOpenHeld, multiOpenActive, appState.drillDownApp == nil {
+            toggleMultiOpen(named: name)
+        } else {
+            selectCurrentApp(named: name)
+        }
+    }
+
+    /// Queues the entry, or drops it if it's already queued.
+    func toggleMultiOpen(named name: String) {
+        if let index = appState.multiOpenQueue.firstIndex(of: name) {
+            appState.multiOpenQueue.remove(at: index)
+        } else {
+            appState.multiOpenQueue.append(name)
+        }
+        appState.depth = 0
+        appState.typed = ""
+    }
+
+    /// Cells offer clicks here first; true means the click was queued.
+    func queueClickedEntry(_ app: any SwitchableApp) -> Bool {
+        guard multiOpenActive, appState.drillDownApp == nil,
+              NSEvent.modifierFlags.contains(MultiOpenSettings.modifier.nsFlag)
+        else { return false }
+        toggleMultiOpen(named: app.appName.lowercased())
+        return true
+    }
+
+    /// Runs the queue once the modifier is released. A single queued entry is
+    /// a regular select (window picker included); a batch skips the picker,
+    /// runs the current mode's action on each entry in turn and closes.
+    func commitMultiOpen() {
+        let names = appState.multiOpenQueue
+        guard !names.isEmpty else { return }
+        appState.multiOpenQueue = []
+        guard window.isVisible else { return }
+        if names.count == 1 {
+            selectCurrentApp(named: names[0])
+            return
+        }
+        let entries = currentEntries()
+        var batch = names.compactMap { name in
+            entries.first { $0.appName.lowercased() == name }
+        }
+        // Captured before closing, which resets the mode to normal.
+        let theme = ModeTheme.theme(for: appState.mode)
+        // Announced once, in selection order; the actions below stay silent so
+        // per-app alerts don't replace it one by one.
+        SwitchAlertController.shared.show(theme.alertVerb, appNames: batch.map(\.appName))
+        // Each action brings its app forward, so the last one ends on top.
+        if MultiOpenSettings.order == .firstOnTop {
+            batch.reverse()
+        }
+        closeWindow()
+        Haptics.perform(.switchApp)
+        for (index, entry) in batch.enumerated() {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + MultiOpenSettings.actionDelay * Double(index)
+            ) {
+                theme.performAppAction(entry)
+            }
+        }
     }
 
     var windowPosition: Position {
@@ -918,10 +1068,104 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    /// Off-screen stand-in that asks AppKit where `center()` would put a panel
+    /// of a given size, without moving the real one mid-animation.
+    private lazy var centerProbe = NSWindow(
+        contentRect: .zero,
+        styleMask: [.borderless],
+        backing: .buffered,
+        defer: true
+    )
+
+    /// Where the panel belongs at `size` under the current Window Position,
+    /// re-anchored from where it sits now.
+    private func anchoredOrigin(for size: NSSize, from current: NSRect? = nil) -> NSPoint {
+        let current = current ?? window.frame
+        switch windowPosition {
+        case .default:
+            centerProbe.setFrame(NSRect(origin: current.origin, size: size), display: false)
+            centerProbe.center()
+            return centerProbe.frame.origin
+        case .mousePos:
+            // Keep the centre it was summoned around rather than the
+            // bottom-left corner, clamped so growth can't push it off-screen.
+            let visible = (window.screen ?? screenWithMouse()).visibleFrame
+            return NSPoint(
+                x: min(max(current.midX - size.width / 2, visible.minX), visible.maxX - size.width),
+                y: min(max(current.midY - size.height / 2, visible.minY), visible.maxY - size.height)
+            )
+        case .custom:
+            // Center-anchored percentages: the dragged spot survives the
+            // panel growing or shrinking with its content.
+            return customOrigin(for: size)
+        default:
+            return windowPosition.point(for: size, on: window.screen ?? screenWithMouse())
+        }
+    }
+
+    /// True while a mode switch animates the panel to its new frame; the
+    /// layout-driven resize path stands down so it can't snap it mid-flight.
+    private var isModeResizeAnimating = false
+    /// The mode-switch resize waiting for SwiftUI to commit the new content.
+    private var pendingModeResize: DispatchWorkItem?
+
+    private static let modeResizeDuration = 0.25
+
+    /// Resizes the open panel after its content swapped to or from a custom
+    /// mode, animating it to the frame its Window Position dictates for the
+    /// new size. Measuring right after the state change would still read the
+    /// old content, so this waits for SwiftUI to commit first.
+    func animateResizeForModeChange() {
+        guard window.isVisible else { return }
+        pendingModeResize?.cancel()
+        // Raised now so the layout hook can't snap to the new size before
+        // the animation starts.
+        isModeResizeAnimating = true
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            pendingModeResize = nil
+            guard window.isVisible, !isOpenAnimating, !isClosingAnimated,
+                  let hostingView = window.contentView
+            else {
+                isModeResizeAnimating = false
+                return
+            }
+            hostingView.layoutSubtreeIfNeeded()
+            let newSize = hostingView.fittingSize
+            guard newSize.width > 0, newSize.height > 0 else {
+                isModeResizeAnimating = false
+                return
+            }
+            let target = NSRect(origin: anchoredOrigin(for: newSize), size: newSize)
+            guard target != window.frame,
+                  !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            else {
+                window.setFrame(target, display: false)
+                isModeResizeAnimating = false
+                return
+            }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = Self.modeResizeDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                self.window.animator().setFrame(target, display: true)
+            } completionHandler: {
+                self.isModeResizeAnimating = false
+                // The content may have changed again while in flight.
+                self.resizeWindowToFit()
+            }
+        }
+        pendingModeResize = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.layoutCommitDelay, execute: work)
+    }
+
     func resizeWindowToFit(force: Bool = false) {
         guard force || window.isVisible else { return }
         // Repositioning mid-entrance would snap the animated frame.
-        guard !isOpenAnimating else { return }
+        guard !isOpenAnimating, !isModeResizeAnimating else { return }
+        // Resizes that landed mid-animation were skipped by the resize
+        // observer; catch up now that the panel has settled.
+        handleWindowDidResize()
         guard let hostingView = window.contentView else { return }
         hostingView.layoutSubtreeIfNeeded()
         let newSize = hostingView.fittingSize
@@ -940,16 +1184,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // the resize; center()'s placement math is left to AppKit.
             window.center()
         } else {
-            var targetOrigin = window.frame.origin
-            if windowPosition == .custom {
-                // Center-anchored percentages: the dragged spot survives the
-                // panel growing or shrinking with its content.
-                targetOrigin = customOrigin(for: newSize)
-            } else if windowPosition != .mousePos {
-                let screen = window.screen ?? screenWithMouse()
-                targetOrigin = windowPosition.point(for: newSize, on: screen)
-            }
-            window.setFrame(NSRect(origin: targetOrigin, size: newSize), display: false)
+            window.setFrame(
+                NSRect(origin: anchoredOrigin(for: newSize), size: newSize),
+                display: false
+            )
         }
     }
 
@@ -976,7 +1214,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let contentView = SwitcherHostingView(
             rootView: ContentView(appState: appState, appDelegate: self)
         )
-        contentView.translatesAutoresizingMaskIntoConstraints = false
+        // resizeWindowToFit() is the panel's only sizer. Left to its default
+        // sizing options the hosting view also drives the window through
+        // constraints, which can disagree with fittingSize by a point; the
+        // two then fight every frame and anything anchored to the content
+        // (an open context menu) creeps.
+        contentView.sizingOptions = []
         contentView.resizeHandler = { [weak self] in
             self?.resizeWindowToFit()
         }
@@ -990,10 +1233,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.setContentSize(contentView.fittingSize)
         window.center()
 
-        if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-            window.makeKeyAndOrderFront(nil)
-            appState.depth = 0
-            appState.typed = ""
+        // Onboarding opens itself via OnboardingLauncher. Deferred a runloop
+        // turn so ContentView's notification subscriptions are live.
+        if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding"), !launchedAsLoginItem {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .openSettingsRequested, object: nil)
+            }
         }
 
         NotificationCenter.default.addObserver(
@@ -1068,6 +1313,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
 
         setupTapCacheRefresh()
+        WindowPreviewStore.shared.startBackgroundCaching()
         setupEventTap()
         setupAutoSelect()
         setupWindowMoveTracking()
@@ -1095,6 +1341,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { [weak self] _ in
             self?.handleWindowDidMove()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleWindowDidResize()
         }
 
         NSEvent.addLocalMonitorForEvents(
@@ -1130,11 +1384,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleWindowMoveTrackingGates() -> Bool {
         guard !suppressMoveSaving else { return false }
         guard window.isVisible else { return false }
-        guard !isOpenAnimating, !isClosingAnimated else { return false }
+        guard !isOpenAnimating, !isClosingAnimated, !isModeResizeAnimating else { return false }
         return true
     }
 
     private func handleWindowDidMove() {
+        // A pure move (drag, placement) becomes the new anchor; a move that
+        // came with a resize is left for handleWindowDidResize to re-anchor.
+        if window.frame.size == lastAnchoredFrame?.size {
+            lastAnchoredFrame = window.frame
+        }
         guard handleWindowMoveTrackingGates() else { return }
 
         // didMove also fires for non-drag relayouts; a save is only scheduled
@@ -1204,6 +1463,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         dragWasActive = false
         isUserDraggingWindow = false
         pendingDragMouseDown = nil
+    }
+
+    /// The hosting view resizes the panel as its content changes (typing
+    /// narrows the list), and AppKit keeps the bottom-left origin when it
+    /// does. Re-anchor every settled resize so the panel stays where its
+    /// Window Position puts it instead of drifting off-center.
+    private func handleWindowDidResize() {
+        guard window.isVisible, !isOpenAnimating, !isClosingAnimated,
+              !isModeResizeAnimating, !isUserDraggingWindow
+        else { return }
+        let size = window.frame.size
+        let target = anchoredOrigin(for: size, from: lastAnchoredFrame)
+        if abs(target.x - window.frame.minX) > 0.5 || abs(target.y - window.frame.minY) > 0.5 {
+            setWindowOrigin(target)
+        }
+        lastAnchoredFrame = window.frame
     }
 
     /// Free users can drag but don't keep it: restore the placement the saved
@@ -1281,7 +1556,7 @@ extension AppDelegate {
                 if let drillApp = self.appState.drillDownApp {
                     let allWindows = fetchWindowsForApp(drillApp)
                     let matched = allWindows.filter {
-                        $0.title.lowercased().starts(with: typed.lowercased())
+                        $0.title.matchesTyped(typed)
                     }
                     if matched.count == 1 {
                         let theme = ModeTheme.theme(for: self.appState.mode)
@@ -1294,10 +1569,13 @@ extension AppDelegate {
                     }
                 } else {
                     let filteredApps = self.currentEntries().filter {
-                        $0.appName.lowercased().starts(with: typed.lowercased())
+                        $0.appName.matchesTyped(typed)
                     }
                     if filteredApps.count == 1 {
-                        self.selectCurrentApp(named: filteredApps[0].appName.lowercased())
+                        self.pickApp(
+                            named: filteredApps[0].appName.lowercased(),
+                            multiOpenHeld: NSEvent.modifierFlags.contains(MultiOpenSettings.modifier.nsFlag)
+                        )
                     }
                 }
             }
@@ -1311,7 +1589,7 @@ extension AppDelegate {
 
         guard AXIsProcessTrusted() else {
             if permissionCheckTimer == nil {
-                print("Accessibility permission not granted — hotkeys are inactive, polling for it")
+                print("Accessibility permission not granted; hotkeys are inactive, polling for it")
                 permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
                     [weak self] _ in
                     if AXIsProcessTrusted() {
@@ -1373,6 +1651,10 @@ extension AppDelegate {
         print("Event tap disabled by \(cause), re-enabling")
         heldModifierKeyCodes.removeAll()
         allModifiersHeldPreviously = false
+        // The release that would have run the queue may be among the missed
+        // events; drop it rather than fire a batch at some later key-up.
+        multiOpenWasHeld = false
+        DispatchQueue.main.async { self.appState.multiOpenQueue = [] }
         CGEvent.tapEnable(tap: tap, enable: true)
     }
 
@@ -1384,6 +1666,41 @@ extension AppDelegate {
             actualStringLength: &length,
             unicodeString: &chars
         )
+        return pickerCharacter(chars, length: length)
+    }
+
+    /// The character `keyCode` types with no modifiers, in the current layout.
+    private func unmodifiedCharacter(keyCode: Int64) -> String? {
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let layoutPointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+        else { return nil }
+        let layoutData = Unmanaged<CFData>.fromOpaque(layoutPointer).takeUnretainedValue() as Data
+        var deadKeyState: UInt32 = 0
+        var chars = [UniChar](repeating: 0, count: 4)
+        var length = 0
+        let status = layoutData.withUnsafeBytes { raw -> OSStatus in
+            guard let layout = raw.bindMemory(to: UCKeyboardLayout.self).baseAddress else {
+                return OSStatus(paramErr)
+            }
+            return UCKeyTranslate(
+                layout,
+                UInt16(keyCode),
+                UInt16(kUCKeyActionDown),
+                0,
+                UInt32(LMGetKbdType()),
+                OptionBits(kUCKeyTranslateNoDeadKeysBit),
+                &deadKeyState,
+                chars.count,
+                &length,
+                &chars
+            )
+        }
+        guard status == noErr else { return nil }
+        return pickerCharacter(chars, length: length)
+    }
+
+    /// A single letter, digit or space, lowercased; anything else isn't typeable.
+    private func pickerCharacter(_ chars: [UniChar], length: Int) -> String? {
         guard length > 0 else { return nil }
         let s = String(utf16CodeUnits: chars, count: length)
         guard s.count == 1, let c = s.first, c.isLetter || c.isNumber || c == " " else { return nil }
@@ -1418,11 +1735,21 @@ extension AppDelegate {
                 guard let flag = flagForKeyCode[code] else { return false }
                 return flags.contains(flag)
             }
+
+            let multiOpenHeld = flags.contains(MultiOpenSettings.modifier.cgFlag)
+            if multiOpenWasHeld, !multiOpenHeld {
+                DispatchQueue.main.async { self.commitMultiOpen() }
+            }
+            multiOpenWasHeld = multiOpenHeld
         }
 
         if keyCode == 53, window.isVisible {
             DispatchQueue.main.async {
-                if self.appState.drillDownApp != nil {
+                if !self.appState.multiOpenQueue.isEmpty {
+                    // Cancel the batch but keep the switcher up; releasing
+                    // the modifier then does nothing.
+                    self.appState.multiOpenQueue = []
+                } else if self.appState.drillDownApp != nil {
                     if self.appState.typed.isEmpty {
                         self.appState.drillDownApp = nil
                     } else {
@@ -1435,7 +1762,7 @@ extension AppDelegate {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) {
                         self.appState.activeModeID = nil
                     }
-                    self.resizeWindowToFit(force: true)
+                    self.animateResizeForModeChange()
                 } else {
                     self.closeWindow()
                 }
@@ -1464,30 +1791,36 @@ extension AppDelegate {
            UserDefaults.standard.bool(forKey: "keyboardNavigationEnabled")
         {
             let relevant = flags.intersection([.maskShift, .maskControl, .maskAlternate, .maskCommand])
+            // Holding the multi-open modifier keeps navigation working, and
+            // Return then queues the selection instead of activating it.
+            let multiOpenHeld = onlyMultiOpenModifierHeld(flags)
+            let unmodified = relevant.isEmpty || multiOpenHeld
             // The summon hotkey (a specific key + modifiers) wins over nav keys.
             let summonHeld =
                 savedKeycode != 256
                     && keyCode == Int64(savedKeycode)
                     && modifiersSatisfied(config: parseModifierConfig())
             if !summonHeld {
-                if keyCode == 48, relevant.isEmpty {
-                    DispatchQueue.main.async { self.moveKeyboardSelection(+1) }
-                    return nil
-                }
+                // Shift+Tab stays "back" even when Shift is the multi-open modifier.
                 if keyCode == 48, relevant == .maskShift {
                     DispatchQueue.main.async { self.moveKeyboardSelection(-1) }
                     return nil
                 }
-                if keyCode == 124, relevant.isEmpty {
+                if keyCode == 48, unmodified {
                     DispatchQueue.main.async { self.moveKeyboardSelection(+1) }
                     return nil
                 }
-                if keyCode == 123, relevant.isEmpty {
-                    DispatchQueue.main.async { self.moveKeyboardSelection(-1) }
+                let arrows: [Int64: NavigationDirection] = [
+                    123: .left, 124: .right, 125: .down, 126: .up,
+                ]
+                if let direction = arrows[keyCode], unmodified {
+                    DispatchQueue.main.async { self.moveKeyboardSelection(direction) }
                     return nil
                 }
-                if keyCode == 36 || keyCode == 76, relevant.isEmpty {
-                    DispatchQueue.main.async { self.activateKeyboardSelection() }
+                if keyCode == 36 || keyCode == 76, unmodified {
+                    DispatchQueue.main.async {
+                        self.activateKeyboardSelection(multiOpenHeld: multiOpenHeld)
+                    }
                     return nil
                 }
             }
@@ -1528,7 +1861,11 @@ extension AppDelegate {
             }
         }
 
-        if window.isVisible, flags == CGEventFlags(rawValue: 256) {
+        // Typing with the multi-open modifier held picks apps too — only on the
+        // app list, the window picker has nothing to queue into.
+        let multiOpenTyping =
+            type == .keyDown && appState.drillDownApp == nil && onlyMultiOpenModifierHeld(flags)
+        if window.isVisible, flags == CGEventFlags(rawValue: 256) || multiOpenTyping {
             // Backspace: remove the last typed character so a typo doesn't force
             // Escape + full retype.
             if keyCode == 51, !appState.typed.isEmpty {
@@ -1538,7 +1875,9 @@ extension AppDelegate {
                 }
                 return nil
             }
-            if let letter = typedCharacter(from: event) {
+            // The modifier changes what the key produces (⇧1 is "!", ⌥a is
+            // "å"), so read the key as if it were pressed on its own.
+            if let letter = multiOpenTyping ? unmodifiedCharacter(keyCode: keyCode) : typedCharacter(from: event) {
                 let raw = String(letter)
                 let pickerChar: String
                 if proState.isPro {
@@ -1547,14 +1886,18 @@ extension AppDelegate {
                 } else {
                     pickerChar = raw
                 }
+                // Separators are skipped when matching, so typing one would
+                // only desync the badge position; swallow it.
+                if pickerChar.allSatisfy(\.isTypedMatchSeparator) {
+                    return nil
+                }
                 let candidate = appState.typed + pickerChar
-                let candidateLower = candidate.lowercased()
 
                 if appState.drillDownApp != nil {
                     // Window-picking mode: match against window titles for this app
                     let allWindows = tapDrillWindows()
                     let matchingWindows = allWindows.filter {
-                        $0.title.lowercased().hasPrefix(candidateLower)
+                        $0.title.matchesTyped(candidate)
                     }
                     if matchingWindows.isEmpty {
                         return nil
@@ -1581,7 +1924,7 @@ extension AppDelegate {
 
                 // App-picking mode: match against app names (unchanged)
                 let matchingNames = tapAppNames().filter { app in
-                    app.hasPrefix(candidateLower)
+                    app.matchesTyped(candidate)
                 }
                 if matchingNames.isEmpty {
                     return nil
@@ -1589,7 +1932,7 @@ extension AppDelegate {
                 if matchingNames.count == 1 {
                     let name = matchingNames[0]
                     DispatchQueue.main.async {
-                        self.selectCurrentApp(named: name)
+                        self.pickApp(named: name, multiOpenHeld: multiOpenTyping)
                     }
                     return nil
                 }

@@ -6,6 +6,8 @@ struct WindowInfo: Identifiable {
     let title: String
     let axElement: AXUIElement
     let ownerApp: NSRunningApplication
+    /// CoreGraphics ID used to capture a preview; nil if AX can't map it.
+    let windowID: CGWindowID?
 
     func performAction(_ action: AppMode) {
         switch action {
@@ -45,7 +47,10 @@ func fetchWindowsForApp(_ nsApp: NSRunningApplication) -> [WindowInfo] {
             let title = titleRef as? String,
             !title.isEmpty
         else { return nil }
-        return WindowInfo(id: index, title: title, axElement: axWindow, ownerApp: nsApp)
+        return WindowInfo(
+            id: index, title: title, axElement: axWindow, ownerApp: nsApp,
+            windowID: cgWindowID(for: axWindow)
+        )
     }
 
     var nameCounts: [String: Int] = [:]
@@ -62,7 +67,10 @@ func fetchWindowsForApp(_ nsApp: NSRunningApplication) -> [WindowInfo] {
             nameCounters[key] = index + 1
             title = "\(letterForIndex(index)) - \(window.title)"
         }
-        return WindowInfo(id: window.id, title: title, axElement: window.axElement, ownerApp: window.ownerApp)
+        return WindowInfo(
+            id: window.id, title: title, axElement: window.axElement, ownerApp: window.ownerApp,
+            windowID: window.windowID
+        )
     }
 }
 

@@ -36,6 +36,7 @@ enum RegisteredTabs {
     static let themingTabs: [AnySettingsTab] = [
         AnySettingsTab(id: "appearance", title: "Appearance", icon: "paintpalette.fill", content: AnyView(AppearanceSettingsView())),
         AnySettingsTab(id: "layout", title: "Layout", icon: "rectangle.grid.2x2", content: AnyView(LayoutSettingsView())),
+        AnySettingsTab(id: "icons", title: "Icons", icon: "app.badge", content: AnyView(IconsSettingsView())),
         AnySettingsTab(id: "animation", title: "Animation", icon: "sparkles", content: AnyView(AnimationSettingsView())),
         AnySettingsTab(id: "haptics", title: "Haptics", icon: "waveform", content: AnyView(HapticsSettingsView())),
     ]

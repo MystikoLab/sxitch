@@ -21,13 +21,19 @@ struct ListAppLayout: View {
                             app: app,
                             depth: typed.count,
                             onTap: onTap,
-                            isSelected: isSelected(app)
+                            isSelected: isSelected(app),
+                            hasSelection: selection != nil
                         )
+                        .navigationPoint(app.appName.lowercased())
                     }
                 }
+                // Columns take their widest row's width instead of whatever
+                // width the panel was last laid out at.
+                .fixedSize(horizontal: true, vertical: false)
             }
         }
         .padding(6)
+        .navigationFlowAxis(.vertical)
     }
 
     private func isSelected(_ app: any SwitchableApp) -> Bool {

@@ -7,27 +7,54 @@ struct GridAppLayout: View {
     var selection: String?
 
     @Environment(\.modeTheme) var modeTheme
+    @Environment(\.iconStyle) private var iconStyle
+    @AppStorage(WindowPreviewSettings.enabledKey) private var previewsEnabled = false
+    /// Read so the cells redraw when the size changes; the value itself
+    /// goes through `WindowPreviewSettings.width`.
+    @AppStorage(WindowPreviewSettings.sizeKey) private var previewSize = WindowPreviewSize.medium.rawValue
+
+    private var activePreviewWidth: CGFloat? {
+        previewsEnabled && WindowPreviewSettings.isActive
+            ? WindowPreviewSettings.width : nil
+    }
 
     private var chunkedApps: [[any SwitchableApp]] {
-        apps.chunkedEvenly(maxPerRow: 10)
+        apps.chunkedEvenly(maxPerRow: maxPerRow)
+    }
+
+    /// Thumbnail cells are much wider than icons, so with previews on a row
+    /// holds as many as fit across the screen the switcher opens on.
+    private var maxPerRow: Int {
+        guard let activePreviewWidth else { return 10 }
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
+        let available = (screen?.visibleFrame.width ?? 1440) * WindowPreviewSettings.maxRowWidthFraction
+        // Thumbnail + selection reserve (12 each side) + cell padding (12
+        // each side) + HStack spacing.
+        let cellWidth = activePreviewWidth + 24 + 24 + iconStyle.spacing
+        return min(10, max(1, Int(available / cellWidth)))
     }
 
     var body: some View {
-        VStack {
+        VStack(spacing: iconStyle.spacing) {
             ForEach(chunkedApps.indices, id: \.self) { rowIndex in
-                HStack {
+                HStack(spacing: iconStyle.spacing) {
                     ForEach(chunkedApps[rowIndex], id: \.id) { app in
                         RunningAppCell(
                             app: app,
                             depth: typed.count,
                             onTap: onTap,
-                            isSelected: isSelected(app)
+                            isSelected: isSelected(app),
+                            previewWidth: activePreviewWidth,
+                            hasSelection: selection != nil
                         )
+                        .navigationPoint(app.appName.lowercased())
                     }
                 }
             }
         }
         .frame(alignment: .center)
+        .navigationFlowAxis(.horizontal)
     }
 
     private func isSelected(_ app: any SwitchableApp) -> Bool {

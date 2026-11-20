@@ -5,8 +5,25 @@ struct RunningAppListCell: View {
     let depth: Int
     let onTap: (any SwitchableApp) -> Void
     var isSelected: Bool = false
+    /// Whether anything in the switcher is selected, so unselected rows
+    /// only dim while there's a selection to contrast with.
+    var hasSelection: Bool = false
 
     @Environment(\.modeTheme) var modeTheme
+    @Environment(\.iconStyle) private var iconStyle
+    @Environment(\.multiOpenQueue) private var multiOpenQueue
+    @Environment(\.multiOpenClick) private var multiOpenClick
+
+    private var isQueued: Bool {
+        multiOpenQueue.contains(app.appName.lowercased())
+    }
+
+    private var iconSize: CGFloat {
+        36 * iconStyle.scale
+    }
+
+    /// Rows hug their name up to this width, then truncate it.
+    static let maxRowWidth: CGFloat = 320
 
     private var accentColor: Color {
         resolvedAccentColor(from: UserDefaults.standard.string(forKey: "accentColorHex") ?? "system")
@@ -20,17 +37,19 @@ struct RunningAppListCell: View {
                     Image(systemName: symbol)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 36, height: 36)
+                        .frame(width: iconSize, height: iconSize)
                         .foregroundStyle(modeTheme.foregroundStyle)
                 } else {
                     Image(nsImage: app.icon)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 36, height: 36)
+                        .frame(width: iconSize, height: iconSize)
                         .clipped()
                 }
 
-                if let nextChar = app.appName.dropFirst(depth).first(where: { !$0.isWhitespace }) {
+                if iconStyle.showBadge,
+                   let nextChar = app.appName.nextTypedCharacter(afterTyped: depth)
+                {
                     Text(String(nextChar).uppercased())
                         .foregroundStyle(modeTheme.foregroundStyle)
                         .font(.caption2)
@@ -41,25 +60,37 @@ struct RunningAppListCell: View {
                 }
             }
 
+            // List rows always keep their name; it's the row's whole label.
             Text(app.appName)
+                .font(iconStyle.nameFont.font)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .opacity(isSelected ? 1 : 0.7)
-                .fontWeight(isSelected ? .semibold : .regular)
+                .opacity(isSelected || isQueued ? 1 : 0.7)
+                .fontWeight(isSelected || isQueued ? .semibold : .regular)
                 .foregroundStyle(modeTheme.foregroundStyle)
-
-            Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.vertical, iconStyle.spacing)
+        // Fills its column (as wide as the widest row) so outlines line up,
+        // without ever growing past the cap.
+        .frame(maxWidth: Self.maxRowWidth, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(accentColor.opacity(isQueued ? 0.3 : 0))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(accentColor.opacity(isSelected ? 0.9 : 0), lineWidth: 2)
         )
+        .opacity(iconStyle.opacity(isSelected: isSelected || isQueued, hasSelection: hasSelection))
         .animation(.easeOut(duration: 0.12), value: isSelected)
+        .animation(.easeOut(duration: 0.12), value: isQueued)
         .contentShape(Rectangle())
         .appContextMenu(for: app)
         .onTapGesture {
+            if multiOpenClick?(app) == true {
+                return
+            }
             if let override = app.overrideTap {
                 override(app)
             } else {
