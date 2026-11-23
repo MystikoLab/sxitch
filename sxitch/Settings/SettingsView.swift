@@ -132,9 +132,12 @@ struct SettingsView: View {
         NavigationSplitView {
             List(selection: Binding(
                 get: { selectedTab },
-                set: {
-                    if let value = $0 {
-                        selectedTab = value
+                set: { newValue in
+                    if let newValue {
+                        if newValue == "modes" && selectedTab == "modes" {
+                            openModeID = nil
+                        }
+                        selectedTab = newValue
                     }
                 }
             )) {
@@ -183,15 +186,6 @@ struct SettingsView: View {
                                     .foregroundStyle(sidebarIconColor(for: tab.id))
                             }
                             .tag(tab.id)
-                            .simultaneousGesture(
-                                TapGesture().onEnded {
-                                    // Re-clicking "All Modes" while drilled
-                                    // into a mode page exits the drill-down.
-                                    if tab.id == "modes" {
-                                        openModeID = nil
-                                    }
-                                }
-                            )
                         }
                     } header: {
                         // The section header highlights when the selection is

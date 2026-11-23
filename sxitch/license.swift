@@ -105,8 +105,20 @@ struct LicenseInfo: Decodable {
 }
 
 func activateKey(key: String) async throws -> Bool {
+    let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    // Check if device already has stored credentials for this key
+    if let (existingActId, existingKeyId) = try? getCredentials(),
+       existingKeyId.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedKey,
+       !existingActId.isEmpty {
+        if let isValid = try? await validateKey(key: trimmedKey, activationId: existingActId), isValid {
+            recordValidation(granted: true)
+            return true
+        }
+    }
+
     let reqBody = PolarKeyActivationReq(
-        key: key,
+        key: trimmedKey,
         organizationId: ORGANIZATION_ID,
         label: UUID()
     )
