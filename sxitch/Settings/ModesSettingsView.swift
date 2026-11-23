@@ -368,7 +368,7 @@ struct ModeSettingsPage: View {
         alert.messageText = "Add to “\(mode.wrappedValue.name)”"
         alert.informativeText = "What do you want to add to this mode?"
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "Add App")
+        alert.addButton(withTitle: "Add Apps")
         alert.addButton(withTitle: "Add Command")
         alert.addButton(withTitle: "Cancel")
 
